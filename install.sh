@@ -6,6 +6,20 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
+# --- Wykrywanie języka systemu ---
+# Jeśli system jest ustawiony na polski (pl_PL/pl_*) -> komunikaty PL,
+# w każdym innym przypadku -> komunikaty EN.
+detect_system_lang() {
+    local sys_lang="${LANG:-}"
+    [[ -z "$sys_lang" ]] && sys_lang="${LC_ALL:-${LC_MESSAGES:-}}"
+    if [[ "$sys_lang" == pl_PL* || "$sys_lang" == pl* ]]; then
+        echo "pl"
+    else
+        echo "en"
+    fi
+}
+SCRIPT_LANG="$(detect_system_lang)"
+
 # --- Kolory i logowanie ---
 INFO='\033[0;34m'
 SUCCESS='\033[0;32m'
@@ -13,19 +27,65 @@ ERROR='\033[0;31m'
 WARN='\033[0;33m'
 NC='\033[0m'
 
-log_info() { echo -e "${INFO}==> $*${NC}"; }
-log_ok()   { echo -e "${SUCCESS}✔ $*${NC}"; }
-log_err()  { echo -e "${ERROR}✖ BŁĄD: $*${NC}" >&2; }
-log_warn() { echo -e "${WARN}⚠ UWAGA: $*${NC}"; }
+# --- System logowania ---
+# Zasada: na ekranie widoczne są TYLKO ważne komunikaty ogólne
+# (log_info / log_ok / log_err). Wszystko inne (log_warn – szczegóły,
+# pominięcia, drobne problemy) trafia WYŁĄCZNIE do pliku logu.
+# Plik logu jest tworzony na stałe tylko wtedy, gdy wystąpi błąd
+# (skrypt zakończy się kodem innym niż 0) – w przeciwnym razie
+# tymczasowy log jest po prostu kasowany na końcu.
+TMP_LOG="$(mktemp /tmp/install-log.XXXXXX)"
+LOG_FILE="$HOME/install_error_$(date +%Y%m%d_%H%M%S).log"
 
-trap 'log_err "Błąd w linii $LINENO. Polecenie: $BASH_COMMAND"' ERR
+# fd 3 = prawdziwy terminal (do wyświetlania ważnych komunikatów),
+# fd 1/2 od teraz lądują wyłącznie w pliku tymczasowym (ukryte).
+exec 3>&1
+exec >>"$TMP_LOG" 2>&1
+
+cleanup_on_exit() {
+    local exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        cp -f "$TMP_LOG" "$LOG_FILE" 2>/dev/null || true
+        if [[ "$SCRIPT_LANG" == "pl" ]]; then
+            echo -e "${ERROR}✖ Wystąpił błąd (kod: $exit_code). Szczegółowy log zapisano w: $LOG_FILE${NC}" >&3
+        else
+            echo -e "${ERROR}✖ An error occurred (code: $exit_code). Detailed log saved to: $LOG_FILE${NC}" >&3
+        fi
+    fi
+    rm -f "$TMP_LOG"
+}
+trap cleanup_on_exit EXIT
+
+# --- Pomocnicze funkcje logowania ---
+# Każda funkcja przyjmuje: "$1" = tekst PL, "$2" = tekst EN
+_pick_msg() { [[ "$SCRIPT_LANG" == "pl" ]] && echo "$1" || echo "$2"; }
+
+log_info() { local m; m="$(_pick_msg "$1" "$2")"; echo -e "${INFO}==> $m${NC}" >&3; echo -e "${INFO}==> $m${NC}"; }
+log_ok()   { local m; m="$(_pick_msg "$1" "$2")"; echo -e "${SUCCESS}✔ $m${NC}" >&3; echo -e "${SUCCESS}✔ $m${NC}"; }
+log_err() {
+    local m prefix
+    m="$(_pick_msg "$1" "$2")"
+    prefix="$([[ "$SCRIPT_LANG" == "pl" ]] && echo "BŁĄD" || echo "ERROR")"
+    echo -e "${ERROR}✖ ${prefix}: $m${NC}" >&3
+    echo -e "${ERROR}✖ ${prefix}: $m${NC}"
+}
+# log_warn: celowo NIE trafia na ekran (fd 3) - tylko do logu w tle
+log_warn() {
+    local m prefix
+    m="$(_pick_msg "$1" "$2")"
+    prefix="$([[ "$SCRIPT_LANG" == "pl" ]] && echo "UWAGA" || echo "WARNING")"
+    echo -e "${WARN}⚠ ${prefix}: $m${NC}"
+}
+
+trap 'log_err "Błąd w linii $LINENO. Polecenie: $BASH_COMMAND" "Error at line $LINENO. Command: $BASH_COMMAND"' ERR
 
 # --- Zmienna lokalizująca folder ze skryptem (niezależnie skąd jest uruchamiany) ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 
 # --- Funkcja zapobiegająca blokadom APT ---
 wait_for_apt() {
-    log_info "Zatrzymywanie PackageKit i oczekiwanie na zwolnienie blokad APT..."
+    log_info "Zatrzymywanie PackageKit i oczekiwanie na zwolnienie blokad APT..." \
+             "Stopping PackageKit and waiting for APT locks to be released..."
     sudo systemctl stop packagekit 2>/dev/null || true
 
     while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
@@ -39,11 +99,13 @@ wait_for_apt() {
 CURRENT_USER=$(whoami)
 DEB_DIR="/tmp/debs_$$"
 
-log_info "Ten skrypt jest dostosowany do Debian 13 (Stable). Rozpoczynam konfigurację..."
+log_info "Ten skrypt jest dostosowany do Debian 13 (Stable). Rozpoczynam konfigurację..." \
+         "This script is tailored for Debian 13 (Stable). Starting configuration..."
 
 # --- Sprawdzenie uprawnień ---
 if [[ "$EUID" -eq 0 ]]; then
-    log_err "Nie uruchamiaj skryptu jako root. Użyj zwykłego użytkownika z dostępem do sudo."
+    log_err "Nie uruchamiaj skryptu jako root. Użyj zwykłego użytkownika z dostępem do sudo." \
+            "Do not run this script as root. Use a regular user with sudo access."
     exit 1
 fi
 
@@ -54,7 +116,8 @@ echo "$CURRENT_USER ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/99-temp-i
 # ==========================================================
 # 1. PRZYGOTOWANIE
 # ==========================================================
-log_info "Przygotowanie konfiguracji użytkownika..."
+log_info "Przygotowanie konfiguracji użytkownika..." \
+         "Preparing user configuration..."
 
 # Kopiowanie skryptu aktualizacji (jeśli istnieje)
 if [[ -f "$SCRIPT_DIR/.update.sh" ]]; then
@@ -66,23 +129,28 @@ fi
 if [[ -d "$SCRIPT_DIR/.local" ]]; then
     mkdir -p ~/.local
     cp -afT "$SCRIPT_DIR/.local" ~/.local
-    log_ok "Skopiowano katalog '.local' do \$HOME"
+    log_ok "Skopiowano katalog '.local' do \$HOME" \
+           "Copied '.local' directory to \$HOME"
 else
-    log_warn "Brak katalogu '.local' w katalogu skryptu – pominięto"
+    log_warn "Brak katalogu '.local' w katalogu skryptu – pominięto" \
+             "No '.local' directory in script folder – skipped"
 fi
 
 if [[ -d "$SCRIPT_DIR/.config" ]]; then
     mkdir -p ~/.config
     cp -afT "$SCRIPT_DIR/.config" ~/.config
-    log_ok "Skopiowano katalog '.config' do \$HOME"
+    log_ok "Skopiowano katalog '.config' do \$HOME" \
+           "Copied '.config' directory to \$HOME"
 else
-    log_warn "Brak katalogu '.config' w katalogu skryptu – pominięto"
+    log_warn "Brak katalogu '.config' w katalogu skryptu – pominięto" \
+             "No '.config' directory in script folder – skipped"
 fi
 
 # ==========================================================
 # 2. REPOZYTORIA I AKTUALIZACJA SYSTEMU
 # ==========================================================
-log_info "Konfiguracja repozytoriów APT..."
+log_info "Konfiguracja repozytoriów APT..." \
+         "Configuring APT repositories..."
 
 wait_for_apt
 
@@ -131,7 +199,8 @@ sudo rm -f /usr/share/keyrings/brave-browser-archive-keyring.gpg
 BRAVE_KEY_ID="0686B78420038257"
 BRAVE_GNUPGHOME="$(mktemp -d)"
 if ! gpg --homedir "$BRAVE_GNUPGHOME" --keyserver hkps://keyserver.ubuntu.com --recv-keys "$BRAVE_KEY_ID"; then
-    log_warn "keyserver.ubuntu.com nie odpowiedział, próbuję keys.openpgp.org..."
+    log_warn "keyserver.ubuntu.com nie odpowiedział, próbuję keys.openpgp.org..." \
+             "keyserver.ubuntu.com did not respond, trying keys.openpgp.org..."
     gpg --homedir "$BRAVE_GNUPGHOME" --keyserver hkps://keys.openpgp.org --recv-keys "$BRAVE_KEY_ID"
 fi
 gpg --homedir "$BRAVE_GNUPGHOME" --export "$BRAVE_KEY_ID" \
@@ -147,17 +216,20 @@ sudo apt-get update -yq && sudo apt-get full-upgrade -yq
 # ==========================================================
 # 3. INSTALACJA PAKIETÓW
 # ==========================================================
-log_info "Instalacja podstawowych narzędzi i firmware..."
+log_info "Instalacja podstawowych narzędzi i firmware..." \
+         "Installing basic tools and firmware..."
 
 wait_for_apt
 sudo apt-get install -yq isenkram-cli firmware-linux firmware-linux-nonfree \
-    || log_warn "Błąd instalacji pakietów firmware."
+    || log_warn "Błąd instalacji pakietów firmware." "Error installing firmware packages."
 
 sudo isenkram-autoinstall-firmware \
-    || log_warn "isenkram-autoinstall-firmware zakończył się błędem (ignoruję)"
+    || log_warn "isenkram-autoinstall-firmware zakończył się błędem (ignoruję)" \
+               "isenkram-autoinstall-firmware failed (ignoring)"
 
 # --- Usuwanie zbędnych pakietów ---
-log_info "Usuwanie zbędnych pakietów..."
+log_info "Usuwanie zbędnych pakietów..." \
+         "Removing unnecessary packages..."
 PACKAGES_REMOVE=(
     nano konqueror plasma-browser-integration plasma-vault krdp krfb 
     plasma-thunderbolt kontact kmail kontrast plasma-welcome imagemagick 
@@ -171,7 +243,8 @@ done
 sudo apt-get autoremove -yq
 
 # Czyszczenie pozostałości po pakietach KDE PIM
-log_info "Czyszczenie pozostałości po Akonadi/KMail/Kontact w katalogu domowym..."
+log_info "Czyszczenie pozostałości po Akonadi/KMail/Kontact w katalogu domowym..." \
+         "Cleaning up leftover Akonadi/KMail/Kontact files in the home directory..."
 rm -rf ~/.local/share/akonadi ~/.local/share/kmail2 ~/.local/share/local-mail \
        ~/.local/share/contacts ~/.local/share/korganizer ~/.local/share/akregator \
        ~/.local/share/kontact ~/.local/share/konqueror \
@@ -180,7 +253,8 @@ rm -rf ~/.config/akonadi* ~/.config/kmail* ~/.config/kontact* \
        ~/.config/emailidentities ~/.config/mailtransports
 
 # --- Wyłączenie KDE Wallet (Portfela) ---
-log_info "Wyłączanie usługi KDE Wallet..."
+log_info "Wyłączanie usługi KDE Wallet..." \
+         "Disabling KDE Wallet service..."
 mkdir -p ~/.config
 if [[ -f ~/.config/kwalletrc ]]; then
     if grep -q "^\[Wallet\]" ~/.config/kwalletrc; then
@@ -194,7 +268,8 @@ else
 fi
 
 # --- Główna instalacja ---
-log_info "Instalacja pakietów głównych..."
+log_info "Instalacja pakietów głównych..." \
+         "Installing main packages..."
 wait_for_apt
 PACKAGES_INSTALL=(
     # Przeglądarki komunikatory
@@ -225,31 +300,39 @@ for pkg in "${PACKAGES_INSTALL[@]}"; do
     sudo apt-get install -yq "$pkg" || FAILED_PACKAGES+=("$pkg")
 done
 if [[ ${#FAILED_PACKAGES[@]} -gt 0 ]]; then
-    log_warn "Nie udało się zainstalować: ${FAILED_PACKAGES[*]}"
+    log_warn "Nie udało się zainstalować: ${FAILED_PACKAGES[*]}" \
+             "Failed to install: ${FAILED_PACKAGES[*]}"
 fi
 
 # --- Winetricks ---
-log_info "Instalacja winetricks..."
+log_info "Instalacja winetricks..." \
+         "Installing winetricks..."
 sudo apt-get install -yq cabextract unzip wget >/dev/null 2>&1 || true
 if sudo curl -fsSLo /usr/local/bin/winetricks \
         https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \
      && sudo chmod +x /usr/local/bin/winetricks; then
-    log_ok "Winetricks zainstalowany w najnowszej wersji bezpośrednio z GitHub"
+    log_ok "Winetricks zainstalowany w najnowszej wersji bezpośrednio z GitHub" \
+           "Winetricks installed with the latest version directly from GitHub"
 elif sudo apt-get install -yq winetricks; then
-    log_ok "Winetricks zainstalowany z systemowego repozytorium apt"
+    log_ok "Winetricks zainstalowany z systemowego repozytorium apt" \
+           "Winetricks installed from the system apt repository"
 else
-    log_warn "Nie udało się zainstalować winetricks — pomijam."
+    log_warn "Nie udało się zainstalować winetricks — pomijam." \
+             "Failed to install winetricks — skipping."
 fi
 
 # --- WINE ORAZ 32-BITOWE BIBLIOTEKI DO GIER ---
-log_info "Instalacja Wine oraz 32-bitowych bibliotek (Audio, MangoHud)..."
+log_info "Instalacja Wine oraz 32-bitowych bibliotek (Audio, MangoHud)..." \
+         "Installing Wine and 32-bit libraries (Audio, MangoHud)..."
 wait_for_apt
 sudo apt-get install -yq libpulse0:i386 libopenal1:i386 mangohud:i386
 
 if sudo apt-get install -yq wine wine64 wine32:i386; then
-    log_ok "Wine zainstalowany z głównego repozytorium Debiana 13."
+    log_ok "Wine zainstalowany z głównego repozytorium Debiana 13." \
+           "Wine installed from the main Debian 13 repository."
 else
-    log_warn "Wystąpił problem z pakietem wine w systemie. Próba instalacji z repozytorium WineHQ..."
+    log_warn "Wystąpił problem z pakietem wine w systemie. Próba instalacji z repozytorium WineHQ..." \
+             "There was a problem with the system wine package. Trying to install from the WineHQ repository..."
     sudo mkdir -pm755 /etc/apt/keyrings
     if sudo curl -fsSLo /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key \
         && sudo curl -fsSLo /etc/apt/sources.list.d/winehq.sources \
@@ -257,9 +340,11 @@ else
         wait_for_apt
         sudo apt-get update -yq
         if sudo apt-get install -yq --install-recommends winehq-stable; then
-            log_ok "Wine zainstalowany z repozytorium WineHQ."
+            log_ok "Wine zainstalowany z repozytorium WineHQ." \
+                   "Wine installed from the WineHQ repository."
         else
-            log_err "Nie udało się zainstalować Wine ze źródła zapasowego."
+            log_err "Nie udało się zainstalować Wine ze źródła zapasowego." \
+                    "Failed to install Wine from the fallback source."
         fi
     fi
 fi
@@ -267,7 +352,8 @@ fi
 # ==========================================================
 # WYKRYWANIE GPU: 32-BITOWE BIBLIOTEKI I MODUŁY INITRAMFS
 # ==========================================================
-log_info "Wykrywanie układu graficznego (biblioteki 32-bit oraz moduły jądra)..."
+log_info "Wykrywanie układu graficznego (biblioteki 32-bit oraz moduły jądra)..." \
+         "Detecting the graphics chip (32-bit libraries and kernel modules)..."
 VGA_INFO=$(lspci -nn | grep -iE "VGA|3D|Display" || true)
 MODULES_FILE="/etc/initramfs-tools/modules"
 
@@ -277,52 +363,65 @@ add_module() {
 
 wait_for_apt
 if echo "$VGA_INFO" | grep -iq "NVIDIA"; then
-    log_ok "Wykryto układ NVIDIA. Instaluję biblioteki i dodaję moduł..."
+    log_ok "Wykryto układ NVIDIA. Instaluję biblioteki i dodaję moduł..." \
+           "Detected an NVIDIA chip. Installing libraries and adding module..."
     sudo apt-get install -yq libgl1-nvidia-glvnd-glx:i386
     add_module "nvidia"
     add_module "nvidia_modeset"
     add_module "nvidia_uvm"
     add_module "nvidia_drm"
 elif echo "$VGA_INFO" | grep -iq "AMD"; then
-    log_ok "Wykryto układ AMD. Instaluję biblioteki Mesa i dodaję moduł amdgpu..."
+    log_ok "Wykryto układ AMD. Instaluję biblioteki Mesa i dodaję moduł amdgpu..." \
+           "Detected an AMD chip. Installing Mesa libraries and adding the amdgpu module..."
     sudo apt-get install -yq libgl1-mesa-dri:i386 mesa-vulkan-drivers:i386
     add_module "amdgpu"
 elif echo "$VGA_INFO" | grep -iq "Intel"; then
-    log_ok "Wykryto układ Intel. Instaluję biblioteki Mesa i dodaję moduł i915..."
+    log_ok "Wykryto układ Intel. Instaluję biblioteki Mesa i dodaję moduł i915..." \
+           "Detected an Intel chip. Installing Mesa libraries and adding the i915 module..."
     sudo apt-get install -yq libgl1-mesa-dri:i386 mesa-vulkan-drivers:i386
     add_module "i915"
 else
-    log_warn "Nie rozpoznano jednoznacznie układu. Instaluję domyślne pakiety Mesa."
+    log_warn "Nie rozpoznano jednoznacznie układu. Instaluję domyślne pakiety Mesa." \
+             "Could not unambiguously identify the GPU. Installing default Mesa packages."
     sudo apt-get install -yq libgl1-mesa-dri:i386 mesa-vulkan-drivers:i386
 fi
 
-log_info "Przebudowa obrazu initramfs..."
+log_info "Przebudowa obrazu initramfs..." \
+         "Rebuilding the initramfs image..."
 sudo update-initramfs -u
 
 # --- Repozytorium Flathub ---
-log_info "Dodawanie repozytorium Flathub..."
+log_info "Dodawanie repozytorium Flathub..." \
+         "Adding the Flathub repository..."
 sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
 
-log_info "Odświeżanie metadanych Flathub..."
+log_info "Odświeżanie metadanych Flathub..." \
+         "Refreshing Flathub metadata..."
 sudo flatpak update --appstream || true
 
 # --- Gear Lever i Flatseal (Flathub) ---
-log_info "Instalacja Flatseal z Flathub..."
-sudo flatpak install -y flathub com.github.tchx84.Flatseal || log_warn "Błąd instalacji Flatseal"
+log_info "Instalacja Flatseal z Flathub..." \
+         "Installing Flatseal from Flathub..."
+sudo flatpak install -y flathub com.github.tchx84.Flatseal \
+    || log_warn "Błąd instalacji Flatseal" "Error installing Flatseal"
 
-log_info "Instalacja Gear Lever z Flathub..."
-sudo flatpak install -y flathub it.mijorus.gearlever || log_warn "Błąd instalacji Gear Lever"
+log_info "Instalacja Gear Lever z Flathub..." \
+         "Installing Gear Lever from Flathub..."
+sudo flatpak install -y flathub it.mijorus.gearlever \
+    || log_warn "Błąd instalacji Gear Lever" "Error installing Gear Lever"
 
 # --- Paczki .deb z internetu ---
-log_info "Pobieranie i instalacja paczek .deb..."
+log_info "Pobieranie i instalacja paczek .deb..." \
+         "Downloading and installing .deb packages..."
 mkdir -p "$DEB_DIR"
 
 download_deb() {
     local name="$1" url="$2" dest="$3"
     if wget -q --timeout=30 -O "$dest" "$url"; then
-        log_ok "Pobrano: $name"
+        log_ok "Pobrano: $name" "Downloaded: $name"
     else
-        log_warn "Nie udało się pobrać: $name ($url) — pomijam"
+        log_warn "Nie udało się pobrać: $name ($url) — pomijam" \
+                 "Failed to download: $name ($url) — skipping"
         rm -f "$dest"
     fi
 }
@@ -353,7 +452,7 @@ if [[ ${#DEB_FILES[@]} -gt 0 ]]; then
     wait_for_apt
     sudo apt-get install -yq "${DEB_FILES[@]}"
 else
-    log_warn "Brak plików .deb do zainstalowania"
+    log_warn "Brak plików .deb do zainstalowania" "No .deb files to install"
 fi
 shopt -u nullglob
 rm -rf "$DEB_DIR"
@@ -361,7 +460,8 @@ rm -rf "$DEB_DIR"
 # ==========================================================
 # 4. WIRTUALIZACJA I FIREWALL
 # ==========================================================
-log_info "Konfiguracja wirtualizacji i UFW..."
+log_info "Konfiguracja wirtualizacji i UFW..." \
+         "Configuring virtualization and UFW..."
 
 wait_for_apt
 sudo apt-get install -yq \
@@ -373,17 +473,19 @@ sudo apt-get install -yq \
 for svc in libvirtd virtqemud; do
     if systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "$svc"; then
         sudo systemctl enable --now "${svc}.service"
-        log_ok "Uruchomiono serwis: $svc"
+        log_ok "Uruchomiono serwis: $svc" "Started service: $svc"
         break
     fi
 done
 
 if ! sudo virsh net-info default &>/dev/null; then
-    log_warn "Sieć 'default' nie jest zdefiniowana - definiuję z domyślnego XML..."
+    log_warn "Sieć 'default' nie jest zdefiniowana - definiuję z domyślnego XML..." \
+             "Network 'default' is not defined - defining it from the default XML..."
     sudo virsh net-define /usr/share/libvirt/networks/default.xml || true
 fi
 sudo virsh net-start default 2>/dev/null || true
-sudo virsh net-autostart default || log_warn "Nie udało się ustawić autostartu sieci 'default'."
+sudo virsh net-autostart default || log_warn "Nie udało się ustawić autostartu sieci 'default'." \
+                                            "Failed to enable autostart for network 'default'."
 
 if command -v ufw &>/dev/null || [[ -x /usr/sbin/ufw ]]; then
     if [[ -f /etc/default/ufw ]]; then
@@ -399,20 +501,22 @@ if command -v ufw &>/dev/null || [[ -x /usr/sbin/ufw ]]; then
     sudo ufw allow from 192.168.122.0/24
     sudo ufw --force enable
 else
-    log_warn "ufw niedostępny — pomijam konfigurację firewalla"
+    log_warn "ufw niedostępny — pomijam konfigurację firewalla" \
+             "ufw not available — skipping firewall configuration"
 fi
 
 for grp in libvirt libvirt-qemu kvm; do
     if getent group "$grp" &>/dev/null; then
         sudo usermod -aG "$grp" "$CURRENT_USER" \
-            && log_ok "Dodano $CURRENT_USER do grupy $grp"
+            && log_ok "Dodano $CURRENT_USER do grupy $grp" "Added $CURRENT_USER to group $grp"
     fi
 done
 
 # ==========================================================
 # 5. PLYMOUTH (EKRAN STARTOWY)
 # ==========================================================
-log_info "Konfiguracja Plymouth (bgrt)..."
+log_info "Konfiguracja Plymouth (bgrt)..." \
+         "Configuring Plymouth (bgrt)..."
 
 GRUB_PARAMS="quiet splash plymouth.ignore-serial-consoles"
 if ! grep -q "plymouth.ignore-serial-consoles" /etc/default/grub; then
@@ -422,15 +526,18 @@ if ! grep -q "plymouth.ignore-serial-consoles" /etc/default/grub; then
 fi
 
 sudo plymouth-set-default-theme bgrt \
-    || log_warn "plymouth-set-default-theme nie powiodło się (ignoruję)"
+    || log_warn "plymouth-set-default-theme nie powiodło się (ignoruję)" \
+               "plymouth-set-default-theme failed (ignoring)"
 sudo update-grub
 sudo update-initramfs -u \
-    || log_warn "update-initramfs nie powiodło się (ignoruję)"
+    || log_warn "update-initramfs nie powiodło się (ignoruję)" \
+               "update-initramfs failed (ignoring)"
 
 # ==========================================================
 # 6. FINALIZACJA I OPTYMALIZACJA
 # ==========================================================
-log_info "Finalizacja i optymalizacja..."
+log_info "Finalizacja i optymalizacja..." \
+         "Finalizing and optimizing..."
 
 sudo systemctl enable fstrim.timer || true
 sudo journalctl --vacuum-time=2d || true
@@ -441,7 +548,7 @@ sudo update-grub
 if [[ -d "$SCRIPT_DIR/bleachbit" ]]; then
     sudo mkdir -p /root/.config/bleachbit
     sudo cp -af "$SCRIPT_DIR/bleachbit/." /root/.config/bleachbit/
-    log_ok "Skopiowano konfigurację BleachBit"
+    log_ok "Skopiowano konfigurację BleachBit" "Copied BleachBit configuration"
 fi
 
 ACTIVE_CONN=$(nmcli -t -f NAME,DEVICE connection show --active 2>/dev/null \
@@ -456,7 +563,7 @@ fi
 # ==========================================================
 # 7. ZSH + OH MY ZSH + POWERLEVEL10K
 # ==========================================================
-log_info "Konfiguracja ZSH..."
+log_info "Konfiguracja ZSH..." "Configuring ZSH..."
 
 if command -v zsh &>/dev/null; then
     sudo chsh -s /usr/bin/zsh "$CURRENT_USER"
@@ -483,9 +590,9 @@ if command -v zsh &>/dev/null; then
 fi
 
 # ==========================================================
-log_info "Sprzątanie po instalacji..."
+log_info "Sprzątanie po instalacji..." "Cleaning up after installation..."
 sudo rm -f /etc/sudoers.d/99-temp-installer
 
-log_ok "KONFIGURACJA ZAKOŃCZONA SUKCESEM!"
+log_ok "KONFIGURACJA ZAKOŃCZONA SUKCESEM!" "CONFIGURATION COMPLETED SUCCESSFULLY!"
 sleep 3
 systemctl reboot
