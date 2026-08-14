@@ -309,7 +309,9 @@ sudo apt-get install -yq cabextract unzip wget >/dev/null 2>&1 || true
 if sudo curl -fsSLo /usr/local/bin/winetricks \
         https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \
      && sudo chmod +x /usr/local/bin/winetricks; then
+     :
 elif sudo apt-get install -yq winetricks; then
+     :
 else
     log_warn "Nie udało się zainstalować winetricks — pomijam." \
              "Failed to install winetricks — skipping."
@@ -322,6 +324,7 @@ wait_for_apt
 sudo apt-get install -yq libpulse0:i386 libopenal1:i386 mangohud:i386
 
 if sudo apt-get install -yq wine wine64 wine32:i386; then
+   :
 
 else
     log_warn "Wystąpił problem z pakietem wine w systemie. Próba instalacji z repozytorium WineHQ..." \
@@ -330,6 +333,7 @@ else
     if sudo curl -fsSLo /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key \
         && sudo curl -fsSLo /etc/apt/sources.list.d/winehq.sources \
             https://dl.winehq.org/wine-builds/debian/dists/trixie/winehq-trixie.sources; then
+        :
         wait_for_apt
         sudo apt-get update -yq
         if sudo apt-get install -yq --install-recommends winehq-stable; then
