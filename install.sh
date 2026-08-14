@@ -330,10 +330,12 @@ else
     log_warn "Wystąpił problem z pakietem wine w systemie. Próba instalacji z repozytorium WineHQ..." \
              "There was a problem with the system wine package. Trying to install from the WineHQ repository..."
     sudo mkdir -pm755 /etc/apt/keyrings
-    if sudo curl -fsSLo /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key \
-        && sudo curl -fsSLo /etc/apt/sources.list.d/winehq.sources \
+    if ! sudo curl -fsSLo /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key \
+        || ! sudo curl -fsSLo /etc/apt/sources.list.d/winehq.sources \
             https://dl.winehq.org/wine-builds/debian/dists/trixie/winehq-trixie.sources; then
-        :
+        log_err "Nie udało się pobrać klucza lub repozytorium WineHQ." \
+                "Failed to download WineHQ key or repository."
+    else
         wait_for_apt
         sudo apt-get update -yq
         if sudo apt-get install -yq --install-recommends winehq-stable; then
@@ -344,7 +346,6 @@ else
                     "Failed to install Wine from the fallback source."
         fi
     fi
-fi
 
 # ==========================================================
 # WYKRYWANIE GPU: 32-BITOWE BIBLIOTEKI I MODUŁY INITRAMFS
@@ -410,8 +411,7 @@ mkdir -p "$DEB_DIR"
 
 download_deb() {
     local name="$1" url="$2" dest="$3"
-    if wget -q --timeout=30 -O "$dest" "$url"; then
-    else
+    if ! wget -q --timeout=30 -O "$dest" "$url"; then
         log_warn "Nie udało się pobrać: $name ($url) — pomijam" \
                  "Failed to download: $name ($url) — skipping"
         rm -f "$dest"
