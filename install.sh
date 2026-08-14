@@ -201,7 +201,11 @@ BRAVE_GNUPGHOME="$(mktemp -d)"
 if ! gpg --homedir "$BRAVE_GNUPGHOME" --keyserver hkps://keyserver.ubuntu.com --recv-keys "$BRAVE_KEY_ID"; then
     log_warn "keyserver.ubuntu.com nie odpowiedział, próbuję keys.openpgp.org..." \
              "keyserver.ubuntu.com did not respond, trying keys.openpgp.org..."
-    gpg --homedir "$BRAVE_GNUPGHOME" --keyserver hkps://keys.openpgp.org --recv-keys "$BRAVE_KEY_ID"
+
+    if ! gpg --homedir "$BRAVE_GNUPGHOME" --keyserver hkps://keys.openpgp.org --recv-keys "$BRAVE_KEY_ID"; then
+        log_warn "Nie udało się pobrać klucza Brave z żadnego serwera." \
+                 "Failed to fetch Brave GPG key from any server."
+    fi
 fi
 gpg --homedir "$BRAVE_GNUPGHOME" --export "$BRAVE_KEY_ID" \
     | sudo tee /usr/share/keyrings/brave-browser-archive-keyring.gpg > /dev/null
@@ -234,7 +238,7 @@ PACKAGES_REMOVE=(
     nano konqueror plasma-browser-integration plasma-vault krdp krfb 
     plasma-thunderbolt kontact kmail kontrast plasma-welcome imagemagick 
     kaddressbook kdepim-runtime akonadi-server akregator korganizer 
-    epiphany decibels rhythmbox showtime cosmic-player parole konqueror 
+    epiphany decibels rhythmbox showtime cosmic-player parole
     kwalletmanager
 )
 for pkg in "${PACKAGES_REMOVE[@]}"; do
