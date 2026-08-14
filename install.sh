@@ -84,6 +84,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 
 # --- Funkcja zapobiegająca blokadom APT ---
 wait_for_apt() {
+    log_info "Zatrzymywanie PackageKit i oczekiwanie na zwolnienie blokad APT..." \
+             "Stopping PackageKit and waiting for APT locks to be released..."
     sudo systemctl stop packagekit 2>/dev/null || true
 
     while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
@@ -245,8 +247,8 @@ done
 sudo apt-get autoremove -yq
 
 # Czyszczenie pozostałości po pakietach KDE PIM
-log_info "Czyszczenie" \
-         "Cleaning"
+log_info "Czyszczenie pozostałości po Akonadi/KMail/Kontact w katalogu domowym..." \
+         "Cleaning up leftover Akonadi/KMail/Kontact files in the home directory..."
 rm -rf ~/.local/share/akonadi ~/.local/share/kmail2 ~/.local/share/local-mail \
        ~/.local/share/contacts ~/.local/share/korganizer ~/.local/share/akregator \
        ~/.local/share/kontact ~/.local/share/konqueror
@@ -255,6 +257,8 @@ rm -rf ~/.config/akonadi* ~/.config/kmail* ~/.config/kontact* \
        ~/.config/emailidentities ~/.config/mailtransports
 
 # --- Wyłączenie KDE Wallet (Portfela) ---
+log_info "Wyłączanie usługi KDE Wallet..." \
+         "Disabling KDE Wallet service..."
 mkdir -p ~/.config
 if [[ -f ~/.config/kwalletrc ]]; then
     if grep -q "^\[Wallet\]" ~/.config/kwalletrc; then
@@ -305,13 +309,17 @@ if [[ ${#FAILED_PACKAGES[@]} -gt 0 ]]; then
 fi
 
 # --- Winetricks ---
+log_info "Instalacja winetricks..." \
+         "Installing winetricks..."
 sudo apt-get install -yq cabextract unzip wget >/dev/null 2>&1 || true
 if sudo curl -fsSLo /usr/local/bin/winetricks \
         https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \
      && sudo chmod +x /usr/local/bin/winetricks; then
-     :
+    log_ok "Winetricks zainstalowany w najnowszej wersji bezpośrednio z GitHub" \
+           "Winetricks installed with the latest version directly from GitHub"
 elif sudo apt-get install -yq winetricks; then
-     :
+    log_ok "Winetricks zainstalowany z systemowego repozytorium apt" \
+           "Winetricks installed from the system apt repository"
 else
     log_warn "Nie udało się zainstalować winetricks — pomijam." \
              "Failed to install winetricks — skipping."
@@ -324,18 +332,15 @@ wait_for_apt
 sudo apt-get install -yq libpulse0:i386 libopenal1:i386 mangohud:i386
 
 if sudo apt-get install -yq wine wine64 wine32:i386; then
-   :
-
+    log_ok "Wine zainstalowany z głównego repozytorium Debiana 13." \
+           "Wine installed from the main Debian 13 repository."
 else
     log_warn "Wystąpił problem z pakietem wine w systemie. Próba instalacji z repozytorium WineHQ..." \
              "There was a problem with the system wine package. Trying to install from the WineHQ repository..."
     sudo mkdir -pm755 /etc/apt/keyrings
-    if ! sudo curl -fsSLo /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key \
-        || ! sudo curl -fsSLo /etc/apt/sources.list.d/winehq.sources \
+    if sudo curl -fsSLo /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key \
+        && sudo curl -fsSLo /etc/apt/sources.list.d/winehq.sources \
             https://dl.winehq.org/wine-builds/debian/dists/trixie/winehq-trixie.sources; then
-        log_err "Nie udało się pobrać klucza lub repozytorium WineHQ." \
-                "Failed to download WineHQ key or repository."
-    else
         wait_for_apt
         sudo apt-get update -yq
         if sudo apt-get install -yq --install-recommends winehq-stable; then
@@ -346,6 +351,7 @@ else
                     "Failed to install Wine from the fallback source."
         fi
     fi
+fi
 
 # ==========================================================
 # WYKRYWANIE GPU: 32-BITOWE BIBLIOTEKI I MODUŁY INITRAMFS
@@ -411,7 +417,9 @@ mkdir -p "$DEB_DIR"
 
 download_deb() {
     local name="$1" url="$2" dest="$3"
-    if ! wget -q --timeout=30 -O "$dest" "$url"; then
+    if wget -q --timeout=30 -O "$dest" "$url"; then
+        log_ok "Pobrano: $name" "Downloaded: $name"
+    else
         log_warn "Nie udało się pobrać: $name ($url) — pomijam" \
                  "Failed to download: $name ($url) — skipping"
         rm -f "$dest"
