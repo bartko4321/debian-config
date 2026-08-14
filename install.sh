@@ -245,8 +245,8 @@ done
 sudo apt-get autoremove -yq
 
 # Czyszczenie pozostałości po pakietach KDE PIM
-log_info "Czyszczenie pozostałości po Akonadi/KMail/Kontact w katalogu domowym..." \
-         "Cleaning up leftover Akonadi/KMail/Kontact files in the home directory..."
+log_info "Czyszczenie" \
+         "Cleaning"
 rm -rf ~/.local/share/akonadi ~/.local/share/kmail2 ~/.local/share/local-mail \
        ~/.local/share/contacts ~/.local/share/korganizer ~/.local/share/akregator \
        ~/.local/share/kontact ~/.local/share/konqueror
