@@ -84,8 +84,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 
 # --- Funkcja zapobiegająca blokadom APT ---
 wait_for_apt() {
-    log_info "Zatrzymywanie PackageKit i oczekiwanie na zwolnienie blokad APT..." \
-             "Stopping PackageKit and waiting for APT locks to be released..."
     sudo systemctl stop packagekit 2>/dev/null || true
 
     while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
@@ -257,8 +255,6 @@ rm -rf ~/.config/akonadi* ~/.config/kmail* ~/.config/kontact* \
        ~/.config/emailidentities ~/.config/mailtransports
 
 # --- Wyłączenie KDE Wallet (Portfela) ---
-log_info "Wyłączanie usługi KDE Wallet..." \
-         "Disabling KDE Wallet service..."
 mkdir -p ~/.config
 if [[ -f ~/.config/kwalletrc ]]; then
     if grep -q "^\[Wallet\]" ~/.config/kwalletrc; then
@@ -309,17 +305,11 @@ if [[ ${#FAILED_PACKAGES[@]} -gt 0 ]]; then
 fi
 
 # --- Winetricks ---
-log_info "Instalacja winetricks..." \
-         "Installing winetricks..."
 sudo apt-get install -yq cabextract unzip wget >/dev/null 2>&1 || true
 if sudo curl -fsSLo /usr/local/bin/winetricks \
         https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \
      && sudo chmod +x /usr/local/bin/winetricks; then
-    log_ok "Winetricks zainstalowany w najnowszej wersji bezpośrednio z GitHub" \
-           "Winetricks installed with the latest version directly from GitHub"
 elif sudo apt-get install -yq winetricks; then
-    log_ok "Winetricks zainstalowany z systemowego repozytorium apt" \
-           "Winetricks installed from the system apt repository"
 else
     log_warn "Nie udało się zainstalować winetricks — pomijam." \
              "Failed to install winetricks — skipping."
@@ -332,8 +322,7 @@ wait_for_apt
 sudo apt-get install -yq libpulse0:i386 libopenal1:i386 mangohud:i386
 
 if sudo apt-get install -yq wine wine64 wine32:i386; then
-    log_ok "Wine zainstalowany z głównego repozytorium Debiana 13." \
-           "Wine installed from the main Debian 13 repository."
+
 else
     log_warn "Wystąpił problem z pakietem wine w systemie. Próba instalacji z repozytorium WineHQ..." \
              "There was a problem with the system wine package. Trying to install from the WineHQ repository..."
@@ -418,7 +407,6 @@ mkdir -p "$DEB_DIR"
 download_deb() {
     local name="$1" url="$2" dest="$3"
     if wget -q --timeout=30 -O "$dest" "$url"; then
-        log_ok "Pobrano: $name" "Downloaded: $name"
     else
         log_warn "Nie udało się pobrać: $name ($url) — pomijam" \
                  "Failed to download: $name ($url) — skipping"
