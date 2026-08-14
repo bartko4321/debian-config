@@ -247,7 +247,7 @@ log_info "Czyszczenie pozostałości po Akonadi/KMail/Kontact w katalogu domowym
          "Cleaning up leftover Akonadi/KMail/Kontact files in the home directory..."
 rm -rf ~/.local/share/akonadi ~/.local/share/kmail2 ~/.local/share/local-mail \
        ~/.local/share/contacts ~/.local/share/korganizer ~/.local/share/akregator \
-       ~/.local/share/kontact ~/.local/share/konqueror \
+       ~/.local/share/kontact ~/.local/share/konqueror
 rm -rf ~/.config/akonadi* ~/.config/kmail* ~/.config/kontact* \
        ~/.config/korganizer* ~/.config/kaddressbook* ~/.config/akregator* \
        ~/.config/emailidentities ~/.config/mailtransports
@@ -400,13 +400,9 @@ log_info "Odświeżanie metadanych Flathub..." \
 sudo flatpak update --appstream || true
 
 # --- Gear Lever i Flatseal (Flathub) ---
-log_info "Instalacja Flatseal z Flathub..." \
-         "Installing Flatseal from Flathub..."
 sudo flatpak install -y flathub com.github.tchx84.Flatseal \
     || log_warn "Błąd instalacji Flatseal" "Error installing Flatseal"
 
-log_info "Instalacja Gear Lever z Flathub..." \
-         "Installing Gear Lever from Flathub..."
 sudo flatpak install -y flathub it.mijorus.gearlever \
     || log_warn "Błąd instalacji Gear Lever" "Error installing Gear Lever"
 
@@ -548,7 +544,6 @@ sudo update-grub
 if [[ -d "$SCRIPT_DIR/bleachbit" ]]; then
     sudo mkdir -p /root/.config/bleachbit
     sudo cp -af "$SCRIPT_DIR/bleachbit/." /root/.config/bleachbit/
-    log_ok "Skopiowano konfigurację BleachBit" "Copied BleachBit configuration"
 fi
 
 ACTIVE_CONN=$(nmcli -t -f NAME,DEVICE connection show --active 2>/dev/null \
