@@ -217,7 +217,6 @@ rm -rf ~/.config/akonadi* ~/.config/kmail* ~/.config/kontact* ~/.config/korganiz
 mkdir -p ~/.config
 if [[ -f ~/.config/kwalletrc ]]; then
     if grep -q "^\[Wallet\]" ~/.config/kwalletrc; then
-        # Wyciągamy TYLKO sekcję [Wallet], żeby sprawdzić czy zawiera własną linię Enabled=
         WALLET_SECTION="$(awk '/^\[Wallet\]/{f=1;next} /^\[/{f=0} f' ~/.config/kwalletrc)"
         sed -i '/^\[Wallet\]/,/^\[/{s/^Enabled=.*/Enabled=false/}' ~/.config/kwalletrc
         if ! echo "$WALLET_SECTION" | grep -q "^Enabled="; then
@@ -268,8 +267,6 @@ wait_for_apt
 sudo apt-get install -yq libpulse0:i386 libopenal1:i386 mangohud:i386 || true
 
 if ! sudo apt-get install -yq wine wine64 wine32:i386; then
-    # Usuwamy to, co mogło się częściowo zainstalować z repo Debiana,
-    # żeby uniknąć konfliktu z pakietami z WineHQ
     sudo apt-get purge -yq wine wine64 wine32 2>/dev/null || true
     sudo mkdir -pm755 /etc/apt/keyrings
     if sudo curl -fsSLo /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key && sudo curl -fsSLo /etc/apt/sources.list.d/winehq.sources https://dl.winehq.org/wine-builds/debian/dists/trixie/winehq-trixie.sources; then
@@ -281,7 +278,30 @@ fi
 
 show_progress 7 $TOTAL_STEPS "$MSG_PHASE_2"
 
-VGA_INFO=$(lspci -nn | grep -iE "VGA|3D|Display" || true)
+VGA_INFO=""
+HYBRID_GPU=false
+if command -v lspci &>/dev/null; then
+    VGA_INFO=$(lspci -nn | grep -iE "VGA|3D|Display" || true)
+    INTEL_COUNT=$(echo "$VGA_INFO" | grep -i -c "intel" || true)
+    AMD_COUNT=$(echo "$VGA_INFO" | grep -i -c -E "amd|ati" || true)
+    NVIDIA_COUNT=$(echo "$VGA_INFO" | grep -i -c "nvidia" || true)
+
+    TOTAL_KNOWN=$((INTEL_COUNT + AMD_COUNT + NVIDIA_COUNT))
+
+    if [ -z "$VGA_INFO" ] || [ "$TOTAL_KNOWN" -eq 0 ]; then
+        HYBRID_GPU=false
+        wait_for_apt
+        sudo apt-get install -yq libgl1-mesa-dri:i386 mesa-vulkan-drivers:i386
+    elif [ "$TOTAL_KNOWN" -ge 2 ]; then
+        HYBRID_GPU=true
+    else
+        HYBRID_GPU=false
+    fi
+else
+    wait_for_apt
+    sudo apt-get install -yq libgl1-mesa-dri:i386 mesa-vulkan-drivers:i386
+fi
+
 MODULES_FILE="/etc/initramfs-tools/modules"
 add_module() { grep -q "^$1" "$MODULES_FILE" || echo "$1" | sudo tee -a "$MODULES_FILE" > /dev/null; }
 
