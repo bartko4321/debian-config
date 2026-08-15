@@ -9,7 +9,7 @@ export DEBIAN_FRONTEND=noninteractive
 detect_system_lang() {
     local sys_lang="${LANG:-}"
     [[ -z "$sys_lang" ]] && sys_lang="${LC_ALL:-${LC_MESSAGES:-}}"
-    if [[ "$sys_lang" == pl_PL* || "$sys_lang" == pl* ]]; then
+    if [[ "$sys_lang" == pl* ]]; then
         echo "pl"
     else
         echo "en"
@@ -111,7 +111,17 @@ if [[ "$EUID" -eq 0 ]]; then
 fi
 
 sudo -v
-echo "$CURRENT_USER ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/99-temp-installer > /dev/null
+SUDOERS_TMP="$(mktemp)"
+echo "$CURRENT_USER ALL=(ALL) NOPASSWD: ALL" > "$SUDOERS_TMP"
+chmod 0440 "$SUDOERS_TMP"
+if sudo visudo -cf "$SUDOERS_TMP" &>/dev/null; then
+    sudo install -m 0440 -o root -g root "$SUDOERS_TMP" /etc/sudoers.d/99-temp-installer
+else
+    rm -f "$SUDOERS_TMP"
+    echo -e "${ERROR}✖ Nieprawidłowa składnia pliku sudoers – przerywam.${NC}" >&3
+    exit 1
+fi
+rm -f "$SUDOERS_TMP"
 
 wait_for_apt() {
     sudo systemctl stop packagekit 2>/dev/null || true
@@ -207,8 +217,12 @@ rm -rf ~/.config/akonadi* ~/.config/kmail* ~/.config/kontact* ~/.config/korganiz
 mkdir -p ~/.config
 if [[ -f ~/.config/kwalletrc ]]; then
     if grep -q "^\[Wallet\]" ~/.config/kwalletrc; then
+        # Wyciągamy TYLKO sekcję [Wallet], żeby sprawdzić czy zawiera własną linię Enabled=
+        WALLET_SECTION="$(awk '/^\[Wallet\]/{f=1;next} /^\[/{f=0} f' ~/.config/kwalletrc)"
         sed -i '/^\[Wallet\]/,/^\[/{s/^Enabled=.*/Enabled=false/}' ~/.config/kwalletrc
-        grep -q "^Enabled=" ~/.config/kwalletrc || sed -i '/^\[Wallet\]/a Enabled=false' ~/.config/kwalletrc
+        if ! echo "$WALLET_SECTION" | grep -q "^Enabled="; then
+            sed -i '/^\[Wallet\]/a Enabled=false' ~/.config/kwalletrc
+        fi
     else
         printf '[Wallet]\nEnabled=false\n' >> ~/.config/kwalletrc
     fi
@@ -254,6 +268,9 @@ wait_for_apt
 sudo apt-get install -yq libpulse0:i386 libopenal1:i386 mangohud:i386 || true
 
 if ! sudo apt-get install -yq wine wine64 wine32:i386; then
+    # Usuwamy to, co mogło się częściowo zainstalować z repo Debiana,
+    # żeby uniknąć konfliktu z pakietami z WineHQ
+    sudo apt-get purge -yq wine wine64 wine32 2>/dev/null || true
     sudo mkdir -pm755 /etc/apt/keyrings
     if sudo curl -fsSLo /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key && sudo curl -fsSLo /etc/apt/sources.list.d/winehq.sources https://dl.winehq.org/wine-builds/debian/dists/trixie/winehq-trixie.sources; then
         wait_for_apt
@@ -325,7 +342,7 @@ sudo apt-get install -yq virt-manager qemu-system qemu-utils libvirt-daemon-syst
 
 for svc in libvirtd virtqemud; do
     if systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "$svc"; then
-        sudo systemctl enable --now "${svc}.service"
+        sudo systemctl enable --now "${svc}.service" || true
         break
     fi
 done
@@ -338,25 +355,32 @@ sudo virsh net-autostart default || true
 
 if command -v ufw &>/dev/null || [[ -x /usr/sbin/ufw ]]; then
     [[ -f /etc/default/ufw ]] && sudo sed -i 's/^DEFAULT_FORWARD_POLICY=.*/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw || true
-    sudo ufw --force reset
-    sudo ufw default deny incoming
-    sudo ufw default allow outgoing
-    sudo ufw allow ssh
-    sudo ufw allow in  on virbr0
-    sudo ufw allow out on virbr0
-    sudo ufw allow from 192.168.122.0/24
-    sudo ufw --force enable
+    sudo ufw --force reset || true
+    sudo ufw default deny incoming || true
+    sudo ufw default allow outgoing || true
+    sudo ufw allow ssh || true
+    sudo ufw allow in  on virbr0 || true
+    sudo ufw allow out on virbr0 || true
+    sudo ufw allow from 192.168.122.0/24 || true
+    sudo ufw --force enable || true
 fi
 
 for grp in libvirt libvirt-qemu kvm; do
-    getent group "$grp" &>/dev/null && sudo usermod -aG "$grp" "$CURRENT_USER"
+    getent group "$grp" &>/dev/null && sudo usermod -aG "$grp" "$CURRENT_USER" || true
 done
 
 show_progress 10 $TOTAL_STEPS "$MSG_PHASE_3"
 
-GRUB_PARAMS="quiet splash plymouth.ignore-serial-consoles"
-if ! grep -q "plymouth.ignore-serial-consoles" /etc/default/grub; then
-    sudo sed -i "s|GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${GRUB_PARAMS}\"|" /etc/default/grub || true
+GRUB_CMDLINE_CURRENT="$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub 2>/dev/null | sed -E 's/^GRUB_CMDLINE_LINUX_DEFAULT="(.*)"$/\1/' || true)"
+GRUB_CMDLINE_NEW="$GRUB_CMDLINE_CURRENT"
+for param in quiet splash plymouth.ignore-serial-consoles; do
+    if [[ " $GRUB_CMDLINE_CURRENT " != *" $param "* ]]; then
+        GRUB_CMDLINE_NEW="${GRUB_CMDLINE_NEW} ${param}"
+    fi
+done
+GRUB_CMDLINE_NEW="$(echo "$GRUB_CMDLINE_NEW" | sed -E 's/ +/ /g; s/^ //; s/ $//')"
+if [[ "$GRUB_CMDLINE_NEW" != "$GRUB_CMDLINE_CURRENT" ]]; then
+    sudo sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"${GRUB_CMDLINE_NEW}\"|" /etc/default/grub || true
 fi
 
 sudo plymouth-set-default-theme bgrt || true
@@ -381,7 +405,7 @@ if [[ -n "$ACTIVE_CONN" ]]; then
 fi
 
 if command -v zsh &>/dev/null; then
-    sudo chsh -s /usr/bin/zsh "$CURRENT_USER"
+    sudo chsh -s /usr/bin/zsh "$CURRENT_USER" || true
     if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
         sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended || true
     fi
@@ -393,7 +417,8 @@ if command -v zsh &>/dev/null; then
     if [[ -f "$ZSHRC" ]]; then
         sed -i 's|^ZSH_THEME=.*|ZSH_THEME="powerlevel10k/powerlevel10k"|' "$ZSHRC" || true
         sed -i 's/^plugins=(.*/plugins=(git sudo systemd debian)/' "$ZSHRC" || true
-        grep -q "LC_ALL=pl_PL.UTF-8" "$ZSHRC" || echo "export LC_ALL=pl_PL.UTF-8" >> "$ZSHRC"
+        SHELL_LOCALE="${LANG:-${LC_ALL:-${LC_MESSAGES:-en_US.UTF-8}}}"
+        grep -q "^export LC_ALL=" "$ZSHRC" || echo "export LC_ALL=${SHELL_LOCALE}" >> "$ZSHRC"
         grep -q "^fastfetch"         "$ZSHRC" || echo "fastfetch"                  >> "$ZSHRC"
         grep -q "zsh-syntax-highlighting.zsh" "$ZSHRC" || echo "source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" >> "$ZSHRC"
         grep -q "zsh-autosuggestions.zsh"     "$ZSHRC" || echo "source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh"         >> "$ZSHRC"
