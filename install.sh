@@ -280,13 +280,15 @@ show_progress 7 $TOTAL_STEPS "$MSG_PHASE_2"
 
 VGA_INFO=""
 HYBRID_GPU=false
+GPU_VENDORS=()
 if command -v lspci &>/dev/null; then
     VGA_INFO=$(lspci -nn | grep -iE "VGA|3D|Display" || true)
-    INTEL_COUNT=$(echo "$VGA_INFO" | grep -i -c "intel" || true)
-    AMD_COUNT=$(echo "$VGA_INFO" | grep -i -c -E "amd|ati" || true)
-    NVIDIA_COUNT=$(echo "$VGA_INFO" | grep -i -c "nvidia" || true)
 
-    TOTAL_KNOWN=$((INTEL_COUNT + AMD_COUNT + NVIDIA_COUNT))
+    echo "$VGA_INFO" | grep -qi "intel"     && GPU_VENDORS+=("intel")
+    echo "$VGA_INFO" | grep -qi -E "amd|ati" && GPU_VENDORS+=("amd")
+    echo "$VGA_INFO" | grep -qi "nvidia"    && GPU_VENDORS+=("nvidia")
+
+    TOTAL_KNOWN=${#GPU_VENDORS[@]}
 
     if [ -z "$VGA_INFO" ] || [ "$TOTAL_KNOWN" -eq 0 ]; then
         HYBRID_GPU=false
@@ -306,19 +308,28 @@ MODULES_FILE="/etc/initramfs-tools/modules"
 add_module() { grep -q "^$1" "$MODULES_FILE" || echo "$1" | sudo tee -a "$MODULES_FILE" > /dev/null; }
 
 wait_for_apt
-if echo "$VGA_INFO" | grep -iq "NVIDIA"; then
-    sudo apt-get install -yq libgl1-nvidia-glvnd-glx:i386
-    add_module "nvidia"
-    add_module "nvidia_modeset"
-    add_module "nvidia_uvm"
-    add_module "nvidia_drm"
-elif echo "$VGA_INFO" | grep -iq "AMD"; then
-    sudo apt-get install -yq libgl1-mesa-dri:i386 mesa-vulkan-drivers:i386
-    add_module "amdgpu"
-elif echo "$VGA_INFO" | grep -iq "Intel"; then
-    sudo apt-get install -yq libgl1-mesa-dri:i386 mesa-vulkan-drivers:i386
-    add_module "i915"
+if [ "${#GPU_VENDORS[@]}" -gt 0 ]; then
+    for vendor in "${GPU_VENDORS[@]}"; do
+        case "$vendor" in
+            "nvidia")
+                sudo apt-get install -yq libgl1-nvidia-glvnd-glx:i386
+                add_module "nvidia"
+                add_module "nvidia_modeset"
+                add_module "nvidia_uvm"
+                add_module "nvidia_drm"
+                ;;
+            "amd")
+                sudo apt-get install -yq libgl1-mesa-dri:i386 mesa-vulkan-drivers:i386
+                add_module "amdgpu"
+                ;;
+            "intel")
+                sudo apt-get install -yq libgl1-mesa-dri:i386 mesa-vulkan-drivers:i386
+                add_module "i915"
+                ;;
+        esac
+    done
 else
+    # GPU nieznane/niewykryte -> generyczne sterowniki mesa (jak wcześniej)
     sudo apt-get install -yq libgl1-mesa-dri:i386 mesa-vulkan-drivers:i386
 fi
 sudo update-initramfs -u
