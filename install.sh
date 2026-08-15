@@ -251,7 +251,7 @@ fi
 show_progress 6 $TOTAL_STEPS "$MSG_PHASE_2"
 
 wait_for_apt
-sudo apt-get install -yq libpulse0:i386 libopenal1:i386 mangohud:i386
+sudo apt-get install -yq libpulse0:i386 libopenal1:i386 mangohud:i386 || true
 
 if ! sudo apt-get install -yq wine wine64 wine32:i386; then
     sudo mkdir -pm755 /etc/apt/keyrings
@@ -299,7 +299,7 @@ get_github_deb_url() { curl -sf "https://api.github.com/repos/${1}/releases/late
 
 download_deb "Discord" "https://discord.com/api/download?platform=linux&format=deb" "$DEB_DIR/discord.deb"
 LSFG_URL=$(get_github_deb_url "YuriSizov/ls-fg" "ls-fg_.*deb")
-LSFG_VK_URL=$(get_github_deb_url "YuriSizov/ls-fg-vk" "deb")
+LSFG_VK_URL=$(get_github_deb_url "YuriSizov/ls-fg-vk" "ls-fg-vk_.*deb")
 FAUGUS_URL=$(get_github_deb_url "faugus/faugus-launcher" "deb")
 
 [[ -n "$LSFG_URL" ]] && download_deb "ls-fg" "$LSFG_URL" "$DEB_DIR/lsfg.deb"
@@ -321,7 +321,7 @@ rm -rf "$DEB_DIR"
 show_progress 9 $TOTAL_STEPS "$MSG_PHASE_3"
 
 wait_for_apt
-sudo apt-get install -yq virt-manager qemu-system qemu-utils libvirt-daemon-system libvirt-clients ovmf dnsmasq bluetooth bluez bluez-firmware bluez-tools ufw
+sudo apt-get install -yq virt-manager qemu-system qemu-utils libvirt-daemon-system libvirt-clients ovmf dnsmasq bluetooth bluez bluez-firmware bluez-tools ufw || true
 
 for svc in libvirtd virtqemud; do
     if systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "$svc"; then
@@ -341,6 +341,7 @@ if command -v ufw &>/dev/null || [[ -x /usr/sbin/ufw ]]; then
     sudo ufw --force reset
     sudo ufw default deny incoming
     sudo ufw default allow outgoing
+    sudo ufw allow ssh
     sudo ufw allow in  on virbr0
     sudo ufw allow out on virbr0
     sudo ufw allow from 192.168.122.0/24
@@ -360,7 +361,7 @@ fi
 
 sudo plymouth-set-default-theme bgrt || true
 sudo sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub || true
-sudo update-grub
+sudo update-grub || true
 sudo update-initramfs -u || true
 
 show_progress 11 $TOTAL_STEPS "$MSG_PHASE_3"
