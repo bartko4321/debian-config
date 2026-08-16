@@ -19,8 +19,8 @@ SCRIPT_LANG="$(detect_system_lang)"
 
 INFO='\033[0;34m'
 SUCCESS='\033[0;32m'
-ERROR='\033[0;31m'
 WARN='\033[0;33m'
+ERR='\033[0;31m'
 NC='\033[0m'
 
 TMP_LOG="$(mktemp /tmp/install-log.XXXXXX)"
@@ -28,8 +28,6 @@ LOG_FILE="$HOME/install_error_$(date +%Y%m%d_%H%M%S).log"
 
 exec 3>&1
 exec >>"$TMP_LOG" 2>&1
-
-printf '\033[?7l' >&3
 
 cleanup_on_exit() {
     local exit_code=$?
@@ -50,7 +48,7 @@ trap cleanup_on_exit EXIT
 _pick_msg() { [[ "$SCRIPT_LANG" == "pl" ]] && echo "$1" || echo "$2"; }
 log_info()  { local m; m="$(_pick_msg "$1" "$2")"; echo -e "${INFO}==> $m${NC}"; }
 log_ok()    { local m; m="$(_pick_msg "$1" "$2")"; echo -e "${SUCCESS}✔ $m${NC}"; }
-log_err()   { local m; m="$(_pick_msg "$1" "$2")"; echo -e "${ERROR}✘ ERROR: $m${NC}"; }
+log_err()   { local m; m="$(_pick_msg "$1" "$2")"; echo -e "${ERR}✘ ERROR: $m${NC}"; }
 log_warn()  { local m; m="$(_pick_msg "$1" "$2")"; echo -e "${WARN}⚠ WARN: $m${NC}"; }
 
 trap 'log_err "Błąd w linii $LINENO. Polecenie: $BASH_COMMAND" "Error at line $LINENO. Command: $BASH_COMMAND"' ERR
@@ -110,6 +108,7 @@ if [[ "$EUID" -eq 0 ]]; then
     exit 1
 fi
 
+printf '\033[?7h\n' >&3
 sudo -v
 SUDOERS_TMP="$(mktemp)"
 echo "$CURRENT_USER ALL=(ALL) NOPASSWD: ALL" > "$SUDOERS_TMP"
@@ -122,6 +121,8 @@ else
     exit 1
 fi
 rm -f "$SUDOERS_TMP"
+
+printf '\033[?7l' >&3
 
 wait_for_apt() {
     sudo systemctl stop packagekit 2>/dev/null || true
@@ -329,7 +330,6 @@ if [ "${#GPU_VENDORS[@]}" -gt 0 ]; then
         esac
     done
 else
-    # GPU nieznane/niewykryte -> generyczne sterowniki mesa (jak wcześniej)
     sudo apt-get install -yq libgl1-mesa-dri:i386 mesa-vulkan-drivers:i386
 fi
 sudo update-initramfs -u
