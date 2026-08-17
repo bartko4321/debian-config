@@ -208,7 +208,7 @@ wait_for_apt
 sudo apt-get install -yq isenkram-cli firmware-linux firmware-linux-nonfree || true
 sudo isenkram-autoinstall-firmware || true
 
-PACKAGES_REMOVE=(nano konqueror plasma-browser-integration plasma-vault krdp krfb plasma-thunderbolt kontact kmail kontrast plasma-welcome imagemagick kaddressbook kdepim-runtime akonadi-server akregator korganizer epiphany decibels rhythmbox gnome-music gnome-user-docs gnome-contacts gnome-maps gnome-weather loupe papers gnome-text-editor gnome-calendar gnome-clocks yelp showtime cosmic-player parole kwalletmanager)
+PACKAGES_REMOVE=(nano konqueror plasma-browser-integration plasma-vault krdp krfb plasma-thunderbolt kontact kmail kontrast plasma-welcome kaddressbook kdepim-runtime akonadi-server akregator korganizer epiphany decibels gnome-user-docs gnome-contacts gnome-maps gnome-weather cosmic-player kwalletmanager)
 for pkg in "${PACKAGES_REMOVE[@]}"; do
     sudo apt-get purge -yq "$pkg" 2>/dev/null || true
 done
@@ -240,7 +240,7 @@ show_progress 4 $TOTAL_STEPS "$MSG_PHASE_2"
 wait_for_apt
 PACKAGES_INSTALL=(
     google-chrome-stable brave-origin thunderbird telegram-desktop thunderbird-l10n-pl
-    qbittorrent krita audacity gmic mixxx kdenlive handbrake soundconverter vlc elisa
+    qbittorrent krita audacity gmic mixxx kdenlive handbrake soundconverter
     vim dconf-editor hunspell-pl fastfetch bleachbit profile-sync-daemon
     plymouth plymouth-themes unrar-free mc btrfs-progs exfatprogs ntfs-3g os-prober
     adb fastboot fsarchiver inxi pv rsync cdemu-daemon cdemu-client
