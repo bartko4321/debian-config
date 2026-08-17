@@ -206,7 +206,7 @@ wait_for_apt
 sudo apt-get install -yq isenkram-cli firmware-linux firmware-linux-nonfree || true
 sudo isenkram-autoinstall-firmware || true
 
-PACKAGES_REMOVE=(nano konqueror plasma-browser-integration plasma-vault krdp krfb plasma-thunderbolt kontact kmail kontrast plasma-welcome imagemagick kaddressbook kdepim-runtime akonadi-server akregator korganizer epiphany decibels rhythmbox showtime cosmic-player parole kwalletmanager)
+PACKAGES_REMOVE=(nano konqueror plasma-browser-integration plasma-vault krdp krfb plasma-thunderbolt kontact kmail kontrast plasma-welcome imagemagick kaddressbook kdepim-runtime akonadi-server akregator korganizer epiphany decibels rhythmbox gnome-music gnome-user-docs gnome-contacts gnome-maps gnome-weather loupe papers gnome-text-editor gnome-calendar gnome-clocks yelp showtime cosmic-player parole kwalletmanager)
 for pkg in "${PACKAGES_REMOVE[@]}"; do
     sudo apt-get purge -yq "$pkg" 2>/dev/null || true
 done
@@ -268,7 +268,9 @@ wait_for_apt
 sudo apt-get install -yq libpulse0:i386 libopenal1:i386 mangohud:i386 || true
 
 if ! sudo apt-get install -yq wine wine64 wine32:i386; then
-    sudo apt-get purge -yq wine wine64 wine32 2>/dev/null || true
+    for pkg in wine wine64 wine32; do
+        sudo apt-get purge -yq "$pkg" 2>/dev/null || true
+    done
     sudo mkdir -pm755 /etc/apt/keyrings
     if sudo curl -fsSLo /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key && sudo curl -fsSLo /etc/apt/sources.list.d/winehq.sources https://dl.winehq.org/wine-builds/debian/dists/trixie/winehq-trixie.sources; then
         wait_for_apt
