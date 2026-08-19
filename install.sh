@@ -171,6 +171,12 @@ if [[ -f /etc/apt/sources.list.d/debian.sources ]]; then
     fi
 fi
 
+DEBIAN_CODENAME="$(. /etc/os-release 2>/dev/null && echo "$VERSION_CODENAME")"
+[[ -z "$DEBIAN_CODENAME" ]] && DEBIAN_CODENAME="trixie"
+if ! grep -rq "backports" /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
+    echo "deb http://deb.debian.org/debian ${DEBIAN_CODENAME}-backports main contrib non-free non-free-firmware" | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null
+fi
+
 wait_for_apt
 sudo apt-get update -yq || true
 for pkg in curl wget gnupg pciutils; do
