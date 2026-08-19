@@ -249,7 +249,7 @@ show_progress 4 $TOTAL_STEPS "$MSG_PHASE_2"
 
 wait_for_apt
 PACKAGES_INSTALL=(
-    google-chrome-stable brave-origin thunderbird telegram-desktop thunderbird-l10n-pl
+    google-chrome-stable brave-origin thunderbird thunderbird-l10n-pl
     qbittorrent audacity gmic mixxx kdenlive handbrake soundconverter
     vim dconf-editor hunspell-pl fastfetch bleachbit profile-sync-daemon
     plymouth plymouth-themes unrar-free mc btrfs-progs exfatprogs ntfs-3g os-prober
@@ -264,6 +264,8 @@ PACKAGES_INSTALL=(
 for pkg in "${PACKAGES_INSTALL[@]}"; do
     sudo apt-get install -yq "$pkg" || true
 done
+
+sudo apt-get install -yq -t "${DEBIAN_CODENAME}-backports" telegram-desktop || true
 
 show_progress 5 $TOTAL_STEPS "$MSG_PHASE_2"
 
