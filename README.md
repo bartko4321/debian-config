@@ -58,7 +58,7 @@ sudo usermod -aG sudo $USER
 
 # 1. Clone your repository
 ```bash
-git clone https://github.com/bartko4321/debian-config.git
+git clone https://github.com/syscore88/debian-config.git
 ```
 
 # 2. Enter the downloaded folder
