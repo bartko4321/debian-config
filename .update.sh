@@ -1,15 +1,11 @@
 #!/bin/bash
 
-# Kolory / Colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-# =========================================================
-# WYKRYWANIE JĘZYKA SYSTEMU / SYSTEM LANGUAGE DETECTION
-# =========================================================
 DETECTED_LOCALE="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
 if [ -z "$DETECTED_LOCALE" ] && command -v locale &> /dev/null; then
     DETECTED_LOCALE=$(locale 2>/dev/null | grep -m1 '^LANG=' | cut -d= -f2)
@@ -21,9 +17,6 @@ else
     IS_PL=false
 fi
 
-# =========================================================
-# KOMUNIKATY / MESSAGES
-# =========================================================
 if [ "$IS_PL" = true ]; then
     MSG_TITLE="    KOMPLEKSOWY SKRYPT AKTUALIZACJI I CZYSZCZENIA    "
     MSG_ASK_PASS="Proszę podać hasło administratora (sudo):"
@@ -110,30 +103,23 @@ echo -e "${BLUE}=====================================================${NC}"
 echo -e "${BLUE}${MSG_TITLE}${NC}"
 echo -e "${BLUE}=====================================================${NC}"
 
-# 1. ZAPYTANIE O HASŁO TYLKO RAZ / ASK FOR PASSWORD ONCE
 echo -e "${YELLOW}${MSG_ASK_PASS}${NC}"
 sudo -v
 
-# Podtrzymanie sudo / Keep sudo alive
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 SUDO_KEEP_ALIVE_PID=$!
 
 echo -e "\n${GREEN}${MSG_FULL_UPDATE}${NC}"
 
-# Używamy apt-get (stabilne dla skryptów) + ukrywamy irytujące komunikaty o i386
-# (apt-get zwraca komunikaty w języku systemu, więc filtrujemy oba warianty)
 sudo apt-get update 2>&1 | grep -v "nie obsługuje architektury\|Pomijanie pozyskania skonfigurowanego pliku\|does not support architecture\|Skipping acquire of configured file"
 
-# Kontynuacja pełnej aktualizacji (dist-upgrade to odpowiednik full-upgrade w apt-get)
 sudo apt-get dist-upgrade -y
 
-# Aktualizacja Flatpak / Flatpak update
 if command -v flatpak &> /dev/null; then
     echo -e "\n${GREEN}${MSG_FLATPAK_UPDATE}${NC}"
     flatpak update -y
 fi
 
-# Aktualizacja firmware / Firmware update
 FWUPD_RESTART_NEEDED=false
 if command -v fwupdmgr &> /dev/null; then
     echo -e "\n${GREEN}${MSG_FWUPD_REFRESH}${NC}"
@@ -155,13 +141,11 @@ echo -e "\n${BLUE}${MSG_PHASE1_TITLE}${NC}"
 echo -e "${GREEN}${MSG_AUTOREMOVE}${NC}"
 sudo apt-get autoremove --purge -y
 
-# Deborphan
 if command -v deborphan &> /dev/null; then
     echo -e "${GREEN}${MSG_DEBORPHAN}${NC}"
     sudo apt-get purge $(deborphan) -y 2>/dev/null
 fi
 
-# Aktualizacja kluczy APT / APT keys update
 echo -e "${GREEN}${MSG_APTKEY_UPDATE}${NC}"
 sudo apt-key net-update 2>/dev/null
 
@@ -171,14 +155,12 @@ sudo apt-get autoclean
 echo -e "${GREEN}${MSG_REMOVE_PPA_LISTS}${NC}"
 sudo find /etc/apt/sources.list.d/ -type f -name "*.save" -delete
 
-# Kompleksowe czyszczenie Flatpak (System) / Comprehensive Flatpak cleanup (System)
 if command -v flatpak &> /dev/null; then
     echo -e "${GREEN}${MSG_FLATPAK_CLEAN_SYS}${NC}"
     sudo flatpak uninstall --unused --system -y
     sudo flatpak uninstall --unused --delete-data -y 2>/dev/null
     sudo flatpak repair --system
 
-    # Usuwanie nieużywanych repozytoriów (remotes) / Removing unused remotes
     USED_REMOTES=$(flatpak list --columns=origin 2>/dev/null | sort -u)
     ALL_REMOTES=$(flatpak remotes --columns=name 2>/dev/null)
 
@@ -189,12 +171,10 @@ if command -v flatpak &> /dev/null; then
         fi
     done <<< "$ALL_REMOTES"
 
-    # Czyszczenie plików tymczasowych i historii Flatpak / Cleaning temp files and history
     sudo rm -rf /var/tmp/flatpak-cache-* 2>/dev/null
     sudo find /var/lib/flatpak -name "*.tmp" -delete 2>/dev/null
     sudo rm -f /var/lib/flatpak/history 2>/dev/null
 
-    # INTELIGENTNE CZYSZCZENIE /var/app (tylko osierocone dane) / SMART /var/app CLEANUP (orphaned data only)
     echo -e "${GREEN}${MSG_FLATPAK_CLEAN_VARAPP_SYS}${NC}"
     INSTALLED_FLATPAKS=$(flatpak list --app --columns=application 2>/dev/null)
     if [ -d "/var/app" ]; then
@@ -252,7 +232,6 @@ if command -v flatpak &> /dev/null; then
     rm -rf ~/.local/share/flatpak/repo/tmp/* 2>/dev/null
     rm -f ~/.local/share/flatpak/history 2>/dev/null
 
-    # INTELIGENTNE CZYSZCZENIE ~/.var/app (tylko osierocone dane) / SMART ~/.var/app CLEANUP (orphaned data only)
     echo -e "${GREEN}${MSG_FLATPAK_CLEAN_VARAPP_USER}${NC}"
     INSTALLED_FLATPAKS=$(flatpak list --app --columns=application 2>/dev/null)
     if [ -d "$HOME/.var/app" ]; then
@@ -279,13 +258,11 @@ if [ -S "/run/user/$USER_ID/bus" ]; then
 fi
 rm -rf "$HOME/.cache/virt-manager" 2>/dev/null
 
-# Zakończenie / Finish
 kill $SUDO_KEEP_ALIVE_PID 2>/dev/null
 echo -e "\n${BLUE}====================================================${NC}"
 echo -e "${GREEN}${MSG_DONE_TITLE}${NC}"
 echo -e "${BLUE}====================================================${NC}"
 
-# Sprawdzanie konieczności restartu (np. po aktualizacji kernela) / Checking if a restart is needed (e.g. after a kernel update)
 echo -e "\n${GREEN}${MSG_CHECK_SYSTEM}${NC}"
 if [ -f /var/run/reboot-required ]; then
     echo -e "\n${RED}******************************************************${NC}"
