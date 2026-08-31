@@ -226,7 +226,7 @@ rm -rf ~/.cache/akonadi* ~/.cache/kmail* ~/.cache/kontact* ~/.cache/korganizer* 
 rm -rf ~/.local/share/{epiphany,decibels,gnome-user-docs,gnome-contacts,gnome-maps,gnome-weather,gnome-calendar,gnome-clocks,evolution}
 rm -rf ~/.config/{epiphany,decibels,gnome-user-docs,gnome-contacts,gnome-maps,gnome-weather,gnome-calendar,gnome-clocks,evolution}
 rm -rf ~/.cache/{epiphany,decibels,gnome-user-docs,gnome-contacts,gnome-maps,gnome-weather,gnome-calendar,gnome-clocks,evolution}
-dconf reset -f /org/gnome/evolution/
+command -v dconf &>/dev/null && dconf reset -f /org/gnome/evolution/ || true
 
 if dpkg -l plasma-desktop 2>/dev/null | grep -q '^ii' || dpkg -l plasma-workspace 2>/dev/null | grep -q '^ii'; then
     mkdir -p ~/.config
