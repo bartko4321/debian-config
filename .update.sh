@@ -15,7 +15,7 @@ detect_lang() {
     case "$l" in
         pl_PL*|pl*) echo "pl" ;;
         *) echo "en" ;;
-    esac
+    esac 
 }
 SCRIPT_LANG=$(detect_lang)
 
