@@ -1,4 +1,5 @@
 #!/bin/bash
+set -uo pipefail
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -6,189 +7,176 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-DETECTED_LOCALE="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
-if [ -z "$DETECTED_LOCALE" ] && command -v locale &> /dev/null; then
-    DETECTED_LOCALE=$(locale 2>/dev/null | grep -m1 '^LANG=' | cut -d= -f2)
-fi
+detect_lang() {
+    local l="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+    if [ -z "$l" ] && command -v locale &> /dev/null; then
+        l=$(locale 2>/dev/null | grep -m1 '^LANG=' | cut -d= -f2)
+    fi
+    case "$l" in
+        pl_PL*|pl*) echo "pl" ;;
+        *) echo "en" ;;
+    esac
+}
+SCRIPT_LANG=$(detect_lang)
 
-if [[ "$DETECTED_LOCALE" == pl_PL* ]] || [[ "$DETECTED_LOCALE" == pl* ]]; then
-    IS_PL=true
-else
-    IS_PL=false
-fi
-
-if [ "$IS_PL" = true ]; then
-    MSG_TITLE="    KOMPLEKSOWY SKRYPT AKTUALIZACJI I CZYSZCZENIA    "
+if [ "$SCRIPT_LANG" = "pl" ]; then
+    MSG_TITLE="       KOMPLEKSOWY SKRYPT AKTUALIZACJI I CZYSZCZENIA  "
     MSG_ASK_PASS="Proszę podać hasło administratora (sudo):"
-    MSG_FULL_UPDATE="==> Pełna aktualizacja systemu (APT)..."
-    MSG_FLATPAK_UPDATE="==> Pełna aktualizacja aplikacji Flatpak..."
-    MSG_GNOME_EXT_UPDATE="==> Aktualizacja rozszerzeń GNOME Shell (gext)..."
-    MSG_GNOME_EXT_ABSENT="==> gext nieobecny w systemie - pomijam aktualizację rozszerzeń GNOME."
-    MSG_CINNAMON_EXT_UPDATE="==> Aktualizacja rozszerzeń/appletów/dekletów/motywów Cinnamon..."
-    MSG_CINNAMON_EXT_ABSENT="==> cinnamon-spice-updater nieobecny w systemie - pomijam aktualizację Cinnamon."
-    MSG_FWUPD_REFRESH="==> Odświeżanie metadanych firmware (fwupd)..."
-    MSG_FWUPD_UPDATE="==> Sprawdzanie i instalowanie aktualizacji firmware (fwupd)..."
-    MSG_FWUPD_ABSENT="==> fwupdmgr nieobecny w systemie - pomijam aktualizację firmware."
-    MSG_FWUPD_RESTART_NEEDED="UWAGA: Zainstalowano aktualizację firmware wymagającą restartu!"
-    MSG_PHASE1_TITLE="--- FAZA 1: SYSTEM (SUDO) ---"
-    MSG_AUTOREMOVE="==> Usuwanie osieroconych pakietów i zbędnych zależności..."
-    MSG_DEBORPHAN="==> Usuwanie osieroconych bibliotek (deborphan)..."
-    MSG_APTKEY_UPDATE="==> Aktualizacja bazy kluczy zaufanych..."
-    MSG_AUTOCLEAN="==> Czyszczenie cache pobierania APT (stare pakiety)..."
-    MSG_REMOVE_PPA_LISTS="==> Usuwanie nieużywanych repozytoriów (PPA/listy)..."
-    MSG_FLATPAK_CLEAN_SYS="==> Kompleksowe czyszczenie Flatpak (System)..."
-    MSG_FLATPAK_REMOVING_REMOTE="Usuwanie nieużywanego źródła Flatpak:"
-    MSG_FLATPAK_CLEAN_VARAPP_SYS="==> Czyszczenie osieroconych danych po usuniętych aplikacjach w /var/app..."
-    MSG_FLATPAK_REMOVING_VARAPP_SYS="Usuwanie osieroconych danych systemowych w /var/app:"
-    MSG_FLATPAK_ABSENT_SYS="==> Flatpak nieobecny - pomijam czyszczenie systemowe."
-    MSG_CLEAN_LOGS="==> Czyszczenie logów (Journalctl + /var/log)..."
-    MSG_CLEAN_TMP="==> Czyszczenie starego /tmp i /var/tmp (starsze niż 3 dni)..."
-    MSG_REMOVE_OLD_KERNELS="==> Usuwanie starych kerneli (Debian)..."
-    MSG_REMOVING_KERNELS="Usuwanie:"
-    MSG_ONLY_CURRENT_KERNEL="Tylko aktualny kernel w systemie."
-    MSG_PHASE2_TITLE="--- FAZA 2: UŻYTKOWNIK (REAL USER) ---"
-    MSG_CLEAN_USER_CACHE="==> Czyszczenie starego cache (omijanie przeglądarek)..."
-    MSG_CLEAN_THUMBS="==> Czyszczenie starych miniatur..."
-    MSG_FLATPAK_CLEAN_USER="==> Czyszczenie Flatpak (Użytkownik)..."
-    MSG_FLATPAK_CLEAN_VARAPP_USER="==> Czyszczenie osieroconych danych po usuniętych aplikacjach w ~/.var/app..."
-    MSG_FLATPAK_REMOVING_VARAPP_USER="Usuwanie osieroconych danych użytkownika w ~/.var/app:"
-    MSG_REBUILD_FONTS="==> Odświeżanie cache czcionek..."
-    MSG_CLEAN_VIRT="==> Czyszczenie virt-manager i reset dconf..."
-    MSG_DCONF_DONE="==> dconf reset wykonany."
-    MSG_DONE_TITLE="     AKTUALIZACJA I CZYSZCZENIE ZAKOŃCZONE!          "
-    MSG_CHECK_SYSTEM="==> Sprawdzanie stanu systemu..."
-    MSG_RESTART_WARN1="UWAGA: Zainstalowano nowy kernel lub ważne pakiety!"
-    MSG_RESTART_WARN2=" ZALECANY JEST RESTART KOMPUTERA!                     "
-    MSG_NO_RESTART_NEEDED="==> Restart systemu nie jest aktualnie wymagany."
-    MSG_PRESS_ENTER="Naciśnij [ENTER], aby zakończyć..."
+    MSG_PHASE_UPDATE="[1/4] Aktualizacja systemu i aplikacji..."
+    MSG_PHASE_CLEAN_SYS="[2/4] Czyszczenie systemowe (sudo)..."
+    MSG_PHASE_CLEAN_USER="[3/4] Czyszczenie użytkownika..."
+    MSG_PHASE_RESTART="[4/4] Sprawdzanie konieczności restartu..."
+    MSG_DONE="AKTUALIZACJA I CZYSZCZENIE ZAKOŃCZONE!"
+    MSG_RESTART_WARN="UWAGA: Zalecany jest restart komputera (zaktualizowano kernel/firmware/kluczowe komponenty)."
+    MSG_NO_RESTART="Restart systemu nie jest aktualnie wymagany."
 else
-    MSG_TITLE="       COMPREHENSIVE UPDATE AND CLEANUP SCRIPT       "
+    MSG_TITLE="         COMPREHENSIVE UPDATE AND CLEANUP SCRIPT       "
     MSG_ASK_PASS="Please enter the administrator (sudo) password:"
-    MSG_FULL_UPDATE="==> Performing a full system update (APT)..."
-    MSG_FLATPAK_UPDATE="==> Updating Flatpak applications..."
-    MSG_GNOME_EXT_UPDATE="==> Updating GNOME Shell extensions (gext)..."
-    MSG_GNOME_EXT_ABSENT="==> gext not present on the system - skipping GNOME extensions update."
-    MSG_CINNAMON_EXT_UPDATE="==> Updating Cinnamon extensions/applets/desklets/themes..."
-    MSG_CINNAMON_EXT_ABSENT="==> cinnamon-spice-updater not present on the system - skipping Cinnamon update."
-    MSG_FWUPD_REFRESH="==> Refreshing firmware metadata (fwupd)..."
-    MSG_FWUPD_UPDATE="==> Checking for and installing firmware updates (fwupd)..."
-    MSG_FWUPD_ABSENT="==> fwupdmgr not present on the system - skipping firmware update."
-    MSG_FWUPD_RESTART_NEEDED="WARNING: A firmware update requiring a restart was installed!"
-    MSG_PHASE1_TITLE="--- PHASE 1: SYSTEM (SUDO) ---"
-    MSG_AUTOREMOVE="==> Removing orphaned packages and unnecessary dependencies..."
-    MSG_DEBORPHAN="==> Removing orphaned libraries (deborphan)..."
-    MSG_APTKEY_UPDATE="==> Updating the trusted keys database..."
-    MSG_AUTOCLEAN="==> Cleaning the APT download cache (old packages)..."
-    MSG_REMOVE_PPA_LISTS="==> Removing unused repositories (PPA/lists)..."
-    MSG_FLATPAK_CLEAN_SYS="==> Comprehensive Flatpak cleanup (System)..."
-    MSG_FLATPAK_REMOVING_REMOTE="Removing unused Flatpak remote:"
-    MSG_FLATPAK_CLEAN_VARAPP_SYS="==> Cleaning orphaned data from removed apps in /var/app..."
-    MSG_FLATPAK_REMOVING_VARAPP_SYS="Removing orphaned system data in /var/app:"
-    MSG_FLATPAK_ABSENT_SYS="==> Flatpak not present - skipping system cleanup."
-    MSG_CLEAN_LOGS="==> Cleaning logs (Journalctl + /var/log)..."
-    MSG_CLEAN_TMP="==> Cleaning old /tmp and /var/tmp (older than 3 days)..."
-    MSG_REMOVE_OLD_KERNELS="==> Removing old kernels (Debian)..."
-    MSG_REMOVING_KERNELS="Removing:"
-    MSG_ONLY_CURRENT_KERNEL="Only the current kernel is installed on the system."
-    MSG_PHASE2_TITLE="--- PHASE 2: USER (REAL USER) ---"
-    MSG_CLEAN_USER_CACHE="==> Cleaning old cache (skipping browsers)..."
-    MSG_CLEAN_THUMBS="==> Cleaning old thumbnails..."
-    MSG_FLATPAK_CLEAN_USER="==> Cleaning Flatpak (User)..."
-    MSG_FLATPAK_CLEAN_VARAPP_USER="==> Cleaning orphaned data from removed apps in ~/.var/app..."
-    MSG_FLATPAK_REMOVING_VARAPP_USER="Removing orphaned user data in ~/.var/app:"
-    MSG_REBUILD_FONTS="==> Refreshing font cache..."
-    MSG_CLEAN_VIRT="==> Cleaning virt-manager and resetting dconf..."
-    MSG_DCONF_DONE="==> dconf reset completed."
-    MSG_DONE_TITLE="       UPDATE AND CLEANUP COMPLETE!                  "
-    MSG_CHECK_SYSTEM="==> Checking system status..."
-    MSG_RESTART_WARN1="WARNING: A new kernel or important packages have been installed!"
-    MSG_RESTART_WARN2=" A SYSTEM RESTART IS RECOMMENDED!                     "
-    MSG_NO_RESTART_NEEDED="==> A system restart is not currently required."
-    MSG_PRESS_ENTER="Press [ENTER] to finish..."
+    MSG_PHASE_UPDATE="[1/4] Updating system and applications..."
+    MSG_PHASE_CLEAN_SYS="[2/4] System cleanup (sudo)..."
+    MSG_PHASE_CLEAN_USER="[3/4] User cleanup..."
+    MSG_PHASE_RESTART="[4/4] Checking if a restart is needed..."
+    MSG_DONE="UPDATE AND CLEANUP COMPLETE!"
+    MSG_RESTART_WARN="WARNING: A system restart is recommended (kernel/firmware/critical components were updated)."
+    MSG_NO_RESTART="A system restart is not currently required."
 fi
 
-echo -e "${BLUE}=====================================================${NC}"
-echo -e "${BLUE}${MSG_TITLE}${NC}"
-echo -e "${BLUE}=====================================================${NC}"
+TMP_LOG="$(mktemp /tmp/update-log.XXXXXX)"
+LOG_FILE="$HOME/update_error_$(date +%Y%m%d_%H%M%S).log"
 
-echo -e "${YELLOW}${MSG_ASK_PASS}${NC}"
-sudo -v
+# fd 3 = real terminal (progress bar / final messages only).
+# stdout+stderr of everything else is redirected into the log file.
+exec 3>&1
+exec >>"$TMP_LOG" 2>&1
+
+cleanup_on_exit() {
+    local exit_code=$?
+    printf '\033[?25h' >&3
+    echo "" >&3
+    if [ "$exit_code" -ne 0 ]; then
+        cp -f "$TMP_LOG" "$LOG_FILE" 2>/dev/null || true
+        if [ "$SCRIPT_LANG" = "pl" ]; then
+            echo -e "${RED}✘ Wystąpił błąd (kod: $exit_code). Szczegółowy log zapisano w: $LOG_FILE${NC}" >&3
+        else
+            echo -e "${RED}✘ An error occurred (code: $exit_code). Detailed log saved to: $LOG_FILE${NC}" >&3
+        fi
+    fi
+    rm -f "$TMP_LOG"
+    kill "${SUDO_KEEP_ALIVE_PID:-}" 2>/dev/null
+}
+trap cleanup_on_exit EXIT
+
+show_progress() {
+    local step=$1
+    local total=$2
+    local msg=$3
+    local percent=$(( step * 100 / total ))
+
+    local cols
+    cols=$(tput cols 2>/dev/null)
+    [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
+
+    local bar_width=50
+    local reserved=12
+    if (( cols - reserved < bar_width )); then
+        bar_width=$(( cols - reserved ))
+        (( bar_width < 10 )) && bar_width=10
+    fi
+
+    local overhead=$(( bar_width + reserved ))
+    local avail=$(( cols - overhead ))
+    if (( avail < 5 )); then avail=5; fi
+    if (( ${#msg} > avail )); then
+        msg="${msg:0:$((avail - 1))}…"
+    fi
+
+    local filled=$(( percent * bar_width / 100 ))
+    local empty=$(( bar_width - filled ))
+
+    local bar_filled=""
+    local bar_empty=""
+    if [ $filled -gt 0 ]; then printf -v bar_filled '%*s' "$filled" ''; bar_filled="${bar_filled// /#}"; fi
+    if [ $empty -gt 0 ]; then printf -v bar_empty '%*s' "$empty" ''; bar_empty="${bar_empty// /-}"; fi
+
+    printf "\r\033[K[\033[1;32m%s\033[0;90m%s\033[0m] %3d%% | \033[1;36m%s\033[0m" "$bar_filled" "$bar_empty" "$percent" "$msg" >&3
+}
+
+echo -e "${BLUE}======================================================${NC}" >&3
+echo -e "${BLUE}${MSG_TITLE}${NC}" >&3
+echo -e "${BLUE}======================================================${NC}" >&3
+echo -e "${YELLOW}${MSG_ASK_PASS}${NC}" >&3
+sudo -v >&3
 
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 SUDO_KEEP_ALIVE_PID=$!
 
-echo -e "\n${GREEN}${MSG_FULL_UPDATE}${NC}"
+REBOOT_NEEDED=false
+FWUPD_RESTART_NEEDED=false
+TOTAL_STEPS=21
+STEP=0
+show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
 
+# ---------------------------------------------------------------
+# PHASE: UPDATE
+# ---------------------------------------------------------------
 sudo apt-get update 2>&1 | grep -v "nie obsługuje architektury\|Pomijanie pozyskania skonfigurowanego pliku\|does not support architecture\|Skipping acquire of configured file"
-
 sudo apt-get dist-upgrade -y
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
 
 if command -v flatpak &> /dev/null; then
-    echo -e "\n${GREEN}${MSG_FLATPAK_UPDATE}${NC}"
     flatpak update -y
 fi
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
 
 if command -v gext &> /dev/null; then
-    echo -e "\n${GREEN}${MSG_GNOME_EXT_UPDATE}${NC}"
     gext update
-else
-    echo -e "\n${YELLOW}${MSG_GNOME_EXT_ABSENT}${NC}"
 fi
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
 
 if command -v cinnamon-spice-updater &> /dev/null; then
-    echo -e "\n${GREEN}${MSG_CINNAMON_EXT_UPDATE}${NC}"
     cinnamon-spice-updater --update-all
-else
-    echo -e "\n${YELLOW}${MSG_CINNAMON_EXT_ABSENT}${NC}"
 fi
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
 
-FWUPD_RESTART_NEEDED=false
 if command -v fwupdmgr &> /dev/null; then
-    echo -e "\n${GREEN}${MSG_FWUPD_REFRESH}${NC}"
     sudo fwupdmgr refresh --force
-
-    echo -e "\n${GREEN}${MSG_FWUPD_UPDATE}${NC}"
     FWUPD_OUT=$(sudo fwupdmgr update -y 2>&1)
     echo "$FWUPD_OUT"
-
     if echo "$FWUPD_OUT" | grep -qiE "restart|reboot"; then
         FWUPD_RESTART_NEEDED=true
     fi
-else
-    echo -e "\n${YELLOW}${MSG_FWUPD_ABSENT}${NC}"
 fi
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
-echo -e "\n${BLUE}${MSG_PHASE1_TITLE}${NC}"
-
-echo -e "${GREEN}${MSG_AUTOREMOVE}${NC}"
+# ---------------------------------------------------------------
+# PHASE: SYSTEM CLEANUP (SUDO)
+# ---------------------------------------------------------------
 sudo apt-get autoremove --purge -y
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
 if command -v deborphan &> /dev/null; then
-    echo -e "${GREEN}${MSG_DEBORPHAN}${NC}"
     sudo apt-get purge $(deborphan) -y 2>/dev/null
 fi
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
-echo -e "${GREEN}${MSG_APTKEY_UPDATE}${NC}"
 sudo apt-key net-update 2>/dev/null
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
-echo -e "${GREEN}${MSG_AUTOCLEAN}${NC}"
 sudo apt-get autoclean
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
-echo -e "${GREEN}${MSG_REMOVE_PPA_LISTS}${NC}"
 sudo find /etc/apt/sources.list.d/ -type f -name "*.save" -delete
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
 if command -v flatpak &> /dev/null; then
-    echo -e "${GREEN}${MSG_FLATPAK_CLEAN_SYS}${NC}"
     sudo flatpak uninstall --unused --system -y
     sudo flatpak uninstall --unused --delete-data -y 2>/dev/null
     sudo flatpak repair --system
 
     USED_REMOTES=$(flatpak list --columns=origin 2>/dev/null | sort -u)
     ALL_REMOTES=$(flatpak remotes --columns=name 2>/dev/null)
-
     while IFS= read -r remote; do
         if [ -n "$remote" ] && ! echo "$USED_REMOTES" | grep -qx "$remote"; then
-            echo -e "${YELLOW}${MSG_FLATPAK_REMOVING_REMOTE} $remote${NC}"
             sudo flatpak remote-delete --force "$remote" 2>/dev/null
         fi
     done <<< "$ALL_REMOTES"
@@ -197,45 +185,40 @@ if command -v flatpak &> /dev/null; then
     sudo find /var/lib/flatpak -name "*.tmp" -delete 2>/dev/null
     sudo rm -f /var/lib/flatpak/history 2>/dev/null
 
-    echo -e "${GREEN}${MSG_FLATPAK_CLEAN_VARAPP_SYS}${NC}"
     INSTALLED_FLATPAKS=$(flatpak list --app --columns=application 2>/dev/null)
     if [ -d "/var/app" ]; then
         for app_dir in /var/app/*; do
             if [ -d "$app_dir" ]; then
                 app_id=$(basename "$app_dir")
                 if ! echo "$INSTALLED_FLATPAKS" | grep -qx "$app_id"; then
-                    echo -e "${YELLOW}${MSG_FLATPAK_REMOVING_VARAPP_SYS} $app_id${NC}"
                     sudo rm -rf "$app_dir"
                 fi
             fi
         done
     fi
-else
-    echo -e "${YELLOW}${MSG_FLATPAK_ABSENT_SYS}${NC}"
 fi
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
-echo -e "${GREEN}${MSG_CLEAN_LOGS}${NC}"
 sudo journalctl --vacuum-time=7d
 sudo find /var/log -type f -name "*.gz" -mtime +7 -delete
 sudo find /var/log -type f -name "*.1" -delete
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
-echo -e "${GREEN}${MSG_CLEAN_TMP}${NC}"
 sudo find /tmp -type f -atime +3 -delete 2>/dev/null
 sudo find /var/tmp -type f -atime +3 -delete 2>/dev/null
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
-echo -e "${GREEN}${MSG_REMOVE_OLD_KERNELS}${NC}"
 CURRENT_KERNEL=$(uname -r)
 KERNEL_PACKAGES=$(dpkg -l | grep -E 'linux-image-[0-9]' | awk '{print $2}' | grep -v "$CURRENT_KERNEL")
 if [ -n "$KERNEL_PACKAGES" ]; then
-    echo "${MSG_REMOVING_KERNELS} $KERNEL_PACKAGES"
     sudo apt-get purge $KERNEL_PACKAGES -y
-else
-    echo "$MSG_ONLY_CURRENT_KERNEL"
+    REBOOT_NEEDED=true
 fi
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_USER"
 
-echo -e "\n${BLUE}${MSG_PHASE2_TITLE}${NC}"
-
-echo -e "${GREEN}${MSG_CLEAN_USER_CACHE}${NC}"
+# ---------------------------------------------------------------
+# PHASE: USER CLEANUP
+# ---------------------------------------------------------------
 find ~/.cache -type f -atime +14 \
     ! -path "*/mozilla/*" \
     ! -path "*/google-chrome/*" \
@@ -243,64 +226,61 @@ find ~/.cache -type f -atime +14 \
     ! -path "*/BraveSoftware/*" \
     ! -path "*/opera/*" \
     -delete 2>/dev/null
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_USER"
 
-echo -e "${GREEN}${MSG_CLEAN_THUMBS}${NC}"
 find ~/.cache/thumbnails -type f -atime +7 -delete 2>/dev/null
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_USER"
 
 if command -v flatpak &> /dev/null; then
-    echo -e "${GREEN}${MSG_FLATPAK_CLEAN_USER}${NC}"
     flatpak uninstall --unused --user -y
     flatpak uninstall --unused --delete-data -y 2>/dev/null || flatpak uninstall --delete-data -y 2>/dev/null
     rm -rf ~/.local/share/flatpak/repo/tmp/* 2>/dev/null
     rm -f ~/.local/share/flatpak/history 2>/dev/null
 
-    echo -e "${GREEN}${MSG_FLATPAK_CLEAN_VARAPP_USER}${NC}"
     INSTALLED_FLATPAKS=$(flatpak list --app --columns=application 2>/dev/null)
     if [ -d "$HOME/.var/app" ]; then
         for app_dir in "$HOME/.var/app"/*; do
             if [ -d "$app_dir" ]; then
                 app_id=$(basename "$app_dir")
                 if ! echo "$INSTALLED_FLATPAKS" | grep -qx "$app_id"; then
-                    echo -e "${YELLOW}${MSG_FLATPAK_REMOVING_VARAPP_USER} $app_id${NC}"
                     rm -rf "$app_dir"
                 fi
             fi
         done
     fi
 fi
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_USER"
 
-echo -e "${GREEN}${MSG_REBUILD_FONTS}${NC}"
 fc-cache -fv
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_USER"
 
-echo -e "${GREEN}${MSG_CLEAN_VIRT}${NC}"
 USER_ID=$(id -u)
 if [ -S "/run/user/$USER_ID/bus" ]; then
     DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus" dconf reset /org/virt-manager/virt-manager/urls/isos 2>/dev/null
-    echo -e "${GREEN}${MSG_DCONF_DONE}${NC}"
 fi
 rm -rf "$HOME/.cache/virt-manager" 2>/dev/null
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_RESTART"
 
-kill $SUDO_KEEP_ALIVE_PID 2>/dev/null
-echo -e "\n${BLUE}====================================================${NC}"
-echo -e "${GREEN}${MSG_DONE_TITLE}${NC}"
-echo -e "${BLUE}====================================================${NC}"
-
-echo -e "\n${GREEN}${MSG_CHECK_SYSTEM}${NC}"
+# ---------------------------------------------------------------
+# PHASE: RESTART CHECK
+# ---------------------------------------------------------------
 if [ -f /var/run/reboot-required ]; then
-    echo -e "\n${RED}******************************************************${NC}"
-    echo -e "${RED} ${MSG_RESTART_WARN1} ${NC}"
-    echo -e "${YELLOW}${MSG_RESTART_WARN2}${NC}"
-    echo -e "${RED}******************************************************${NC}\n"
-else
-    echo -e "${GREEN}${MSG_NO_RESTART_NEEDED}${NC}"
+    REBOOT_NEEDED=true
 fi
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_RESTART"
 
 if [ "$FWUPD_RESTART_NEEDED" = true ]; then
-    echo -e "\n${RED}******************************************************${NC}"
-    echo -e "${RED} ${MSG_FWUPD_RESTART_NEEDED} ${NC}"
-    echo -e "${YELLOW}${MSG_RESTART_WARN2}${NC}"
-    echo -e "${RED}******************************************************${NC}\n"
+    REBOOT_NEEDED=true
 fi
+STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_RESTART"
 
-echo -e "$MSG_PRESS_ENTER"
-read -r
+echo -e "\n" >&3
+echo -e "${GREEN}======================================================${NC}" >&3
+echo -e "${GREEN}${MSG_DONE}${NC}" >&3
+echo -e "${GREEN}======================================================${NC}" >&3
+
+if [ "$REBOOT_NEEDED" = true ]; then
+    echo -e "${YELLOW}${MSG_RESTART_WARN}${NC}" >&3
+else
+    echo -e "${GREEN}${MSG_NO_RESTART}${NC}" >&3
+fi
