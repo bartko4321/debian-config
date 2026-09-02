@@ -29,6 +29,7 @@ if [ "$SCRIPT_LANG" = "pl" ]; then
     MSG_DONE="AKTUALIZACJA I CZYSZCZENIE ZAKOŃCZONE!"
     MSG_RESTART_WARN="UWAGA: Zalecany jest restart komputera"
     MSG_NO_RESTART="Restart systemu nie jest aktualnie wymagany."
+    MSG_PRESS_ENTER="Naciśnij Enter, aby zamknąć okno..."
 else
     MSG_TITLE="         COMPREHENSIVE UPDATE AND CLEANUP SCRIPT       "
     MSG_ASK_PASS="Please enter the administrator (sudo) password:"
@@ -39,6 +40,7 @@ else
     MSG_DONE="UPDATE AND CLEANUP COMPLETE!"
     MSG_RESTART_WARN="WARNING: A system restart is recommended"
     MSG_NO_RESTART="A system restart is not currently required."
+    MSG_PRESS_ENTER="Press Enter to close this window..."
 fi
 
 TMP_LOG="$(mktemp /tmp/update-log.XXXXXX)"
@@ -279,6 +281,8 @@ echo -e "${GREEN}======================================================${NC}" >&
 
 if [ "$REBOOT_NEEDED" = true ]; then
     echo -e "${YELLOW}${MSG_RESTART_WARN}${NC}" >&3
+    echo -e "${YELLOW}${MSG_PRESS_ENTER}${NC}" >&3
+    read -r
 else
     echo -e "${GREEN}${MSG_NO_RESTART}${NC}" >&3
 fi
