@@ -193,7 +193,7 @@ fi
 
 wait_for_apt
 sudo apt-get update -yq || true
-for pkg in curl wget gnupg pciutils; do
+for pkg in curl wget gnupg pciutils dconf-cli; do
     sudo apt-get install -yq "$pkg" || true
 done
 sudo mkdir -p /etc/apt/keyrings
