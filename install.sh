@@ -302,8 +302,8 @@ for f in /etc/xdg/autostart/gcdemu.desktop /etc/xdg/autostart/cdemu.desktop /usr
 done
 pkill -f gcdemu 2>/dev/null || true
 
-if ! sudo apt-get install -yq -t "${DEBIAN_CODENAME}-backports" telegram-desktop 2>/dev/null; then
-    sudo apt-get install -yq telegram-desktop 2>/dev/null || true
+if ! sudo apt-get install -yq telegram-desktop 2>/dev/null; then
+    sudo apt-get install -yq -t "${DEBIAN_CODENAME}-backports" telegram-desktop 2>/dev/null || true
 fi
 
 show_progress 5 $TOTAL_STEPS "$MSG_PHASE_2"
