@@ -521,11 +521,6 @@ show_progress 11 $TOTAL_STEPS "$MSG_PHASE_3"
 sudo systemctl enable fstrim.timer || true
 sudo journalctl --vacuum-time=2d || true
 
-if [[ -d "$SCRIPT_DIR/bleachbit" ]]; then
-    sudo mkdir -p /root/.config/bleachbit
-    sudo cp -af "$SCRIPT_DIR/bleachbit/." /root/.config/bleachbit/
-fi
-
 sudo mkdir -p /etc/NetworkManager/conf.d
 echo -e "[main]\ndns=default\nrc-manager=symlink" | sudo tee /etc/NetworkManager/conf.d/dns.conf > /dev/null
 echo -e "[global-dns]\n\n[global-dns-domain-*]\nservers=1.1.1.1,1.0.0.1,2606:4700:4700::1112,2606:4700:4700::1002" | sudo tee /etc/NetworkManager/conf.d/global-dns.conf > /dev/null
