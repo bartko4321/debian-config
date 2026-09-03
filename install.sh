@@ -187,13 +187,14 @@ fi
 
 DEBIAN_CODENAME="$(. /etc/os-release 2>/dev/null && echo "$VERSION_CODENAME")"
 [[ -z "$DEBIAN_CODENAME" ]] && DEBIAN_CODENAME="trixie"
-if ! grep -rq "backports" /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
+if ! grep -rqE "^[^#]*${DEBIAN_CODENAME}-backports" /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
     echo "deb http://deb.debian.org/debian ${DEBIAN_CODENAME}-backports main contrib non-free non-free-firmware" | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null
+    sudo apt-get update -yq || true
 fi
 
 wait_for_apt
 sudo apt-get update -yq || true
-for pkg in curl wget gnupg pciutils dconf-cli; do
+for pkg in curl wget gnupg pciutils; do
     sudo apt-get install -yq "$pkg" || true
 done
 sudo mkdir -p /etc/apt/keyrings
@@ -301,7 +302,9 @@ for f in /etc/xdg/autostart/gcdemu.desktop /etc/xdg/autostart/cdemu.desktop /usr
 done
 pkill -f gcdemu 2>/dev/null || true
 
-sudo apt-get install -yq -t "${DEBIAN_CODENAME}-backports" telegram-desktop || true
+if ! sudo apt-get install -yq -t "${DEBIAN_CODENAME}-backports" telegram-desktop 2>/dev/null; then
+    sudo apt-get install -yq telegram-desktop 2>/dev/null || true
+fi
 
 show_progress 5 $TOTAL_STEPS "$MSG_PHASE_2"
 
