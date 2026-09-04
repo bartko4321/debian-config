@@ -73,11 +73,11 @@ cd debian-config
 chmod +x install.sh
 ```
 
-# 4. Run the script as a regular user
-```bash
-./install.sh
-```
-
+#4. Run the script
+   > ⚠️ **IMPORTANT:** Run the script as a **regular user** (NOT as root/sudo). The script will ask for the administrator password at the start to configure              temporary elevated privileges.
+  ```bash
+   ./install.sh
+   ```
 ---
 
 ### ☕ Support the Project
