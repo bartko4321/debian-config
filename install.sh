@@ -229,7 +229,7 @@ wait_for_apt
 sudo apt-get install -yq isenkram-cli firmware-linux firmware-linux-nonfree || true
 sudo isenkram-autoinstall-firmware || true
 
-PACKAGES_REMOVE=(nano konqueror plasma-browser-integration plasma-vault krdp krfb plasma-thunderbolt kontact kmail kontrast plasma-welcome kaddressbook kdepim-runtime akonadi-server akregator korganizer epiphany decibels gnome-user-docs gnome-contacts gnome-maps gnome-weather gnome-calendar gnome-clocks gnome-music parole rhythmbox showtime kwalletmanager evolution,evolution-common,evolution-plugins,evolution-ews)
+PACKAGES_REMOVE=(nano konqueror plasma-browser-integration plasma-vault krdp krfb plasma-thunderbolt dragonplayer elisa kontact kmail kontrast plasma-welcome kaddressbook kdepim-runtime akonadi-server akregator korganizer epiphany decibels gnome-user-docs gnome-contacts gnome-maps gnome-weather gnome-calendar gnome-clocks gnome-music parole rhythmbox showtime kwalletmanager evolution,evolution-common,evolution-plugins,evolution-ews)
 for pkg in "${PACKAGES_REMOVE[@]}"; do
     sudo apt-get purge -yq "$pkg" 2>/dev/null || true
 done
@@ -277,11 +277,11 @@ PACKAGES_INSTALL=(
     plymouth plymouth-themes unrar-free mc btrfs-progs exfatprogs ntfs-3g os-prober
     adb fastboot fsarchiver inxi pv rsync cdemu-daemon cdemu-client
     7zip makeself zenity innoextract needrestart flatpak timeshift
-    python3-defusedxml python3-packaging python3-pip python3-tqdm
-    libayatana-appindicator3-1 gamemode vulkan-tools mangohud dragonplayer elisa
+    python3-defusedxml python3-packaging python3-pip python3-tqdm vlc vlc-plugin-access-extra
+    libayatana-appindicator3-1 gamemode vulkan-tools mangohud qmmp qmmp-plugin-pack
     vkd3d-compiler goverlay gcc make cmake meson ninja-build just build-essential git
     gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
-    zsh zsh-syntax-highlighting zsh-autosuggestions
+    zsh zsh-syntax-highlighting zsh-autosuggestions 
 )
 for pkg in "${PACKAGES_INSTALL[@]}"; do
     sudo apt-get install -yq "$pkg" || true
