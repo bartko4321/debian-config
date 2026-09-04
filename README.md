@@ -88,6 +88,10 @@ If you find this tool helpful and it saved you some time, consider buying me a c
 
 ---
 
+If you find this project useful, leave a star! ⭐
+
+---
+
 ## ⚠️ Requirements & Notes
 
 - A base **Debian 13 (Trixie)** installation with `apt` and an internet connection (packages come from the official repos, backports, Google/Brave/WineHQ repos, Flathub, and GitHub releases).
