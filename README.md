@@ -56,24 +56,24 @@ Sets up Zsh + Oh My Zsh + Powerlevel10k (if `zsh` is present), configures Cloudf
 ```bash
 sudo usermod -aG sudo $USER
 ```
-## 🚀 How to Run
+ 🚀 How to Run
 
-# 1. Clone your repository
+ 1. Clone your repository
 ```bash
 git clone https://gitlab.com/syscore88/debian-config.git
 ```
 
-# 2. Enter the downloaded folder
+2. Enter the downloaded folder
 ```bash
 cd debian-config
 ```
 
-# 3. Make the install.sh script executable
+3. Make the install.sh script executable
 ```bash
 chmod +x install.sh
 ```
 
-#4. Run the script
+4. Run the script
    > ⚠️ **IMPORTANT:** Run the script as a **regular user** (NOT as root/sudo). The script will ask for the administrator password at the start to configure              temporary elevated privileges.
   ```bash
    ./install.sh
