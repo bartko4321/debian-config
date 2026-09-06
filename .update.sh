@@ -23,6 +23,9 @@ if [ "$SCRIPT_LANG" = "pl" ]; then
     MSG_TITLE="       KOMPLEKSOWY SKRYPT AKTUALIZACJI I CZYSZCZENIA  "
     MSG_ASK_PASS="Proszę podać hasło administratora (sudo):"
     MSG_PHASE_UPDATE="[1/4] Aktualizacja systemu i aplikacji..."
+    MSG_PKGS_UPDATED="Aktualizowane pakiety:"
+    MSG_PKGS_NONE="Brak pakietów do aktualizacji (system aktualny)."
+    MSG_FLATPAK_UPDATED="Aktualizowane pakiety Flatpak:"
     MSG_PHASE_CLEAN_SYS="[2/4] Czyszczenie systemowe (sudo)..."
     MSG_PHASE_CLEAN_USER="[3/4] Czyszczenie użytkownika..."
     MSG_PHASE_RESTART="[4/4] Sprawdzanie konieczności restartu..."
@@ -34,6 +37,9 @@ else
     MSG_TITLE="         COMPREHENSIVE UPDATE AND CLEANUP SCRIPT       "
     MSG_ASK_PASS="Please enter the administrator (sudo) password:"
     MSG_PHASE_UPDATE="[1/4] Updating system and applications..."
+    MSG_PKGS_UPDATED="Updating packages:"
+    MSG_PKGS_NONE="No packages to update (system is up to date)."
+    MSG_FLATPAK_UPDATED="Updating Flatpak packages:"
     MSG_PHASE_CLEAN_SYS="[2/4] System cleanup (sudo)..."
     MSG_PHASE_CLEAN_USER="[3/4] User cleanup..."
     MSG_PHASE_RESTART="[4/4] Checking if a restart is needed..."
@@ -101,6 +107,17 @@ show_progress() {
     printf "\r\033[K[\033[1;32m%s\033[0;90m%s\033[0m] %3d%% | \033[1;36m%s\033[0m" "$bar_filled" "$bar_empty" "$percent" "$msg" >&3
 }
 
+print_pkg_list() {
+    local title="$1"
+    local list="$2"
+    [ -z "$list" ] && return
+    printf "\r\033[K" >&3
+    echo -e "${BLUE}${title}${NC}" >&3
+    while IFS= read -r pkg; do
+        [ -n "$pkg" ] && echo -e "  ${GREEN}•${NC} $pkg" >&3
+    done <<< "$list"
+}
+
 echo -e "${BLUE}======================================================${NC}" >&3
 echo -e "${BLUE}${MSG_TITLE}${NC}" >&3
 echo -e "${BLUE}======================================================${NC}" >&3
@@ -120,11 +137,26 @@ show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
 # PHASE: UPDATE
 # ---------------------------------------------------------------
 sudo apt-get update 2>&1 | grep -v "nie obsługuje architektury\|Pomijanie pozyskania skonfigurowanego pliku\|does not support architecture\|Skipping acquire of configured file"
-sudo apt-get dist-upgrade -y
+
+APT_OUTPUT=$(sudo apt-get dist-upgrade -y 2>&1)
+echo "$APT_OUTPUT"
+
+PKG_LIST=$(echo "$APT_OUTPUT" | awk '/^The following packages will be upgraded:/{flag=1; next} /^[0-9]+ upgraded/{flag=0} flag' | tr -s ' \t' '\n' | sed '/^$/d')
+if [ -n "$PKG_LIST" ]; then
+    print_pkg_list "$MSG_PKGS_UPDATED" "$PKG_LIST"
+else
+    printf "\r\033[K" >&3
+    echo -e "${BLUE}${MSG_PKGS_NONE}${NC}" >&3
+fi
+
 STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
 
 if command -v flatpak &> /dev/null; then
-    flatpak update -y
+    FLATPAK_OUTPUT=$(flatpak update -y 2>&1)
+    echo "$FLATPAK_OUTPUT"
+
+    FLATPAK_PKGS=$(echo "$FLATPAK_OUTPUT" | grep -E '\[Update\]' | awk '{print $3}')
+    print_pkg_list "$MSG_FLATPAK_UPDATED" "$FLATPAK_PKGS"
 fi
 STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
 
