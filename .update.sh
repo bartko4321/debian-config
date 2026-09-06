@@ -136,9 +136,9 @@ show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
 # ---------------------------------------------------------------
 # PHASE: UPDATE
 # ---------------------------------------------------------------
-sudo apt-get update 2>&1 | grep -v "nie obsługuje architektury\|Pomijanie pozyskania skonfigurowanego pliku\|does not support architecture\|Skipping acquire of configured file"
+sudo env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get update 2>&1 | grep -v "does not support architecture\|Skipping acquire of configured file"
 
-APT_OUTPUT=$(sudo apt-get dist-upgrade -y 2>&1)
+APT_OUTPUT=$(sudo env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y 2>&1)
 echo "$APT_OUTPUT"
 
 PKG_LIST=$(echo "$APT_OUTPUT" | awk '/^The following packages will be upgraded:/{flag=1; next} /^[0-9]+ upgraded/{flag=0} flag' | tr -s ' \t' '\n' | sed '/^$/d')
@@ -183,18 +183,18 @@ STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 # ---------------------------------------------------------------
 # PHASE: SYSTEM CLEANUP (SUDO)
 # ---------------------------------------------------------------
-sudo apt-get autoremove --purge -y
+sudo env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get autoremove --purge -y
 STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
 if command -v deborphan &> /dev/null; then
-    sudo apt-get purge $(deborphan) -y 2>/dev/null
+    sudo env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get purge $(deborphan) -y 2>/dev/null
 fi
 STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
 sudo apt-key net-update 2>/dev/null
 STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
-sudo apt-get autoclean
+sudo env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get autoclean
 STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
 sudo find /etc/apt/sources.list.d/ -type f -name "*.save" -delete
@@ -243,7 +243,7 @@ STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 CURRENT_KERNEL=$(uname -r)
 KERNEL_PACKAGES=$(dpkg -l | grep -E 'linux-image-[0-9]' | awk '{print $2}' | grep -v "$CURRENT_KERNEL")
 if [ -n "$KERNEL_PACKAGES" ]; then
-    sudo apt-get purge $KERNEL_PACKAGES -y
+    sudo env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get purge $KERNEL_PACKAGES -y
     REBOOT_NEEDED=true
 fi
 STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_USER"
