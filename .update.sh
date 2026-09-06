@@ -129,7 +129,7 @@ SUDO_KEEP_ALIVE_PID=$!
 
 REBOOT_NEEDED=false
 FWUPD_RESTART_NEEDED=false
-TOTAL_STEPS=21
+TOTAL_STEPS=20
 STEP=0
 show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
 
@@ -138,10 +138,13 @@ show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
 # ---------------------------------------------------------------
 sudo env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get update 2>&1 | grep -v "does not support architecture\|Skipping acquire of configured file"
 
+# Capture old -> new version info before the upgrade actually happens
+APT_UPGRADABLE=$(LC_ALL=C apt list --upgradable 2>/dev/null | tail -n +2)
+
 APT_OUTPUT=$(sudo env LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y 2>&1)
 echo "$APT_OUTPUT"
 
-PKG_LIST=$(echo "$APT_OUTPUT" | awk '/^The following packages will be upgraded:/{flag=1; next} /^[0-9]+ upgraded/{flag=0} flag' | tr -s ' \t' '\n' | sed '/^$/d')
+PKG_LIST=$(echo "$APT_UPGRADABLE" | sed -nE 's#^([^/]+)/[^ ]+ +([^ ]+) .*\[upgradable from: ([^]]+)\].*#\1: \3 → \2#p')
 if [ -n "$PKG_LIST" ]; then
     print_pkg_list "$MSG_PKGS_UPDATED" "$PKG_LIST"
 else
@@ -149,15 +152,6 @@ else
     echo -e "${BLUE}${MSG_PKGS_NONE}${NC}" >&3
 fi
 
-STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
-
-if command -v flatpak &> /dev/null; then
-    FLATPAK_OUTPUT=$(flatpak update -y 2>&1)
-    echo "$FLATPAK_OUTPUT"
-
-    FLATPAK_PKGS=$(echo "$FLATPAK_OUTPUT" | grep -E '\[Update\]' | awk '{print $3}')
-    print_pkg_list "$MSG_FLATPAK_UPDATED" "$FLATPAK_PKGS"
-fi
 STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_UPDATE"
 
 if command -v gext &> /dev/null; then
@@ -201,6 +195,18 @@ sudo find /etc/apt/sources.list.d/ -type f -name "*.save" -delete
 STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_SYS"
 
 if command -v flatpak &> /dev/null; then
+    FLATPAK_BEFORE=$(flatpak list --system --app --columns=application,version 2>/dev/null)
+
+    sudo flatpak update --system -y
+
+    FLATPAK_AFTER=$(flatpak list --system --app --columns=application,version 2>/dev/null)
+
+    FLATPAK_PKGS=$(join -t$'\t' -j1 \
+        <(echo "$FLATPAK_BEFORE" | sort -t$'\t' -k1,1) \
+        <(echo "$FLATPAK_AFTER" | sort -t$'\t' -k1,1) 2>/dev/null \
+        | awk -F'\t' '$2 != $3 { printf "%s: %s → %s\n", $1, ($2==""?"?":$2), ($3==""?"?":$3) }')
+    print_pkg_list "$MSG_FLATPAK_UPDATED" "$FLATPAK_PKGS"
+
     sudo flatpak uninstall --unused --system -y
     sudo flatpak uninstall --unused --delete-data -y 2>/dev/null
     sudo flatpak repair --system
@@ -264,6 +270,18 @@ find ~/.cache/thumbnails -type f -atime +7 -delete 2>/dev/null
 STEP=$((STEP+1)); show_progress $STEP $TOTAL_STEPS "$MSG_PHASE_CLEAN_USER"
 
 if command -v flatpak &> /dev/null; then
+    FLATPAK_BEFORE=$(flatpak list --user --app --columns=application,version 2>/dev/null)
+
+    flatpak update --user -y
+
+    FLATPAK_AFTER=$(flatpak list --user --app --columns=application,version 2>/dev/null)
+
+    FLATPAK_PKGS=$(join -t$'\t' -j1 \
+        <(echo "$FLATPAK_BEFORE" | sort -t$'\t' -k1,1) \
+        <(echo "$FLATPAK_AFTER" | sort -t$'\t' -k1,1) 2>/dev/null \
+        | awk -F'\t' '$2 != $3 { printf "%s: %s → %s\n", $1, ($2==""?"?":$2), ($3==""?"?":$3) }')
+    print_pkg_list "$MSG_FLATPAK_UPDATED" "$FLATPAK_PKGS"
+
     flatpak uninstall --unused --user -y
     flatpak uninstall --unused --delete-data -y 2>/dev/null || flatpak uninstall --delete-data -y 2>/dev/null
     rm -rf ~/.local/share/flatpak/repo/tmp/* 2>/dev/null
@@ -313,8 +331,8 @@ echo -e "${GREEN}======================================================${NC}" >&
 
 if [ "$REBOOT_NEEDED" = true ]; then
     echo -e "${YELLOW}${MSG_RESTART_WARN}${NC}" >&3
-    echo -e "${YELLOW}${MSG_PRESS_ENTER}${NC}" >&3
-    read -r
 else
     echo -e "${GREEN}${MSG_NO_RESTART}${NC}" >&3
 fi
+echo -e "${YELLOW}${MSG_PRESS_ENTER}${NC}" >&3
+read -r
